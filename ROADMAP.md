@@ -13,7 +13,7 @@
 - [x] Logic validasi preset (total = 100%)
 - [x] Logic alokasi gaji (gaji + preset → breakdown)
 - [x] Logic bagi kantong tabungan (prioritas T/S/R)
-- [ ] Unit test untuk logic inti
+- [x] Unit test untuk logic inti
 
 ## Fase 2 — UI Dasar (Minggu 3-4)
 
