@@ -9,6 +9,7 @@ import com.zeichi01.gajianku.data.local.dao.AllocationDao
 import com.zeichi01.gajianku.data.local.dao.CategoryDao
 import com.zeichi01.gajianku.data.local.dao.DeficitDao
 import com.zeichi01.gajianku.data.local.dao.EmergencyFundDao
+import com.zeichi01.gajianku.data.local.dao.ExpenseDao
 import com.zeichi01.gajianku.data.local.dao.NotificationDao
 import com.zeichi01.gajianku.data.local.dao.PresetDao
 import com.zeichi01.gajianku.data.local.dao.SavingsTargetDao
@@ -19,6 +20,7 @@ import com.zeichi01.gajianku.data.local.entity.Category
 import com.zeichi01.gajianku.data.local.entity.DeficitHistory
 import com.zeichi01.gajianku.data.local.entity.EmergencyFund
 import com.zeichi01.gajianku.data.local.entity.EmergencyFundHistory
+import com.zeichi01.gajianku.data.local.entity.Expense
 import com.zeichi01.gajianku.data.local.entity.GlobalDeficit
 import com.zeichi01.gajianku.data.local.entity.IncomingNotification
 import com.zeichi01.gajianku.data.local.entity.Preset
@@ -41,9 +43,10 @@ import com.zeichi01.gajianku.data.local.entity.User
         IncomingNotification::class,
         AppNotification::class,
         EmergencyFund::class,
-        EmergencyFundHistory::class
+        EmergencyFundHistory::class,
+        Expense::class
     ],
-    version = 2,
+    version = 3,
     exportSchema = false
 )
 @TypeConverters(Converters::class)
@@ -57,6 +60,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun deficitDao(): DeficitDao
     abstract fun notificationDao(): NotificationDao
     abstract fun emergencyFundDao(): EmergencyFundDao
+    abstract fun expenseDao(): ExpenseDao
 
     companion object {
         @Volatile
