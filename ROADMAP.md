@@ -14,6 +14,8 @@
 - [x] Logic alokasi gaji (gaji + preset → breakdown)
 - [x] Logic bagi kantong tabungan (prioritas T/S/R)
 - [x] Unit test untuk logic inti
+- [x] Repository layer
+- [x] Expense tracking
 
 ## Fase 2 — UI Dasar (Minggu 3-4)
 
