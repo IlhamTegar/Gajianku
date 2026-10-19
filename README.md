@@ -11,11 +11,13 @@ Banyak orang kesulitan mengatur gaji begitu masuk — sering habis tanpa sadar u
 
 ## Fitur Utama
 
-- **Preset Alokasi** — 2 preset default + custom (maks 5), dengan validasi total 100%
+- **Preset Alokasi** — 2 preset default + custom (maks 5), validasi total 100%
 - **Kategori Tetap** — Orangtua, Biaya Hidup, Tabungan Wajib, Tabungan Darurat, Investasi, Gaya Hidup
 - **Target Tabungan Berprioritas** — Tinggi / Sedang / Rendah
-- **Auto-Detect Saldo Masuk** — via NotificationListenerService (parsing notifikasi bank/e-wallet)
-- **Riwayat Alokasi** — per bulan, dengan breakdown
+- **Pencatatan Pengeluaran** — catat biaya hidup & investasi
+- **Tabungan Darurat** — pencatatan pemakaian darurat dengan history
+- **Auto-Detect Saldo Masuk** — (belum diimplementasi, tandai "planned")
+- **Unit Test** — logic alokasi & distribusi teruji
 
 ## Tech Stack
 
