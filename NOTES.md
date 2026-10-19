@@ -69,6 +69,9 @@ Preset menentukan pembagian persentase gaji ke kategori tetap.
 - salary_allocations — bulan, gaji, preset_id, total
 - allocation_items — allocation_id, kategori, nominal
 - incoming_notifs — raw text, parsed nominal, sumber, timestamp, status
+- expenses — pencatatan pengeluaran (kategori, nominal, bulan)
+- emergency_fund — saldo darurat (single row)
+- emergency_fund_history — riwayat pakai/tambah darurat
 
 
 ## Catatan Penting
