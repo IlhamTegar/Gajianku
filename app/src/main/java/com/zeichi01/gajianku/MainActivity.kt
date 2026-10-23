@@ -4,20 +4,26 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
+import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.lifecycleScope
 import com.zeichi01.gajianku.data.local.AppDatabase
 import com.zeichi01.gajianku.data.local.DatabaseSeeder
-import com.zeichi01.gajianku.ui.screen.HomeScreen
 import com.zeichi01.gajianku.ui.screen.OnboardingScreen
 import com.zeichi01.gajianku.ui.theme.GajiankuTheme
 import com.zeichi01.gajianku.ui.viewmodel.MainViewModel
@@ -31,7 +37,6 @@ class MainActivity : ComponentActivity() {
 
         val db = AppDatabase.getInstance(this)
 
-        // Seed database
         lifecycleScope.launch {
             DatabaseSeeder(db).seedIfNeeded()
         }
@@ -50,6 +55,7 @@ class MainActivity : ComponentActivity() {
                 val isLoading by viewModel.isLoading.collectAsState()
                 val currentUser by viewModel.currentUser.collectAsState()
                 val currentAllocation by viewModel.currentAllocation.collectAsState()
+                val availablePresets by viewModel.availablePresets.collectAsState()
 
                 if (isLoading) {
                     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -61,12 +67,76 @@ class MainActivity : ComponentActivity() {
                             onSave = { name, salary -> viewModel.saveOnboardingData(name, salary) }
                         )
                     } else {
-                        // GANTI HomeScreen MENJADI AppNavigation
-                        AppNavigation(
-                            user = currentUser!!,
-                            allocation = currentAllocation,
-                            db = db // <-- Tambahkan ini
-                        )
+                        if (currentAllocation == null && availablePresets.isNotEmpty()) {
+                            // State lokal untuk Dialog Preview
+                            var selectedPreviewId by remember { mutableStateOf<Long?>(null) }
+                            var previewText by remember { mutableStateOf("") }
+
+                            // Ambil data preview saat user mengklik salah satu preset
+                            LaunchedEffect(selectedPreviewId) {
+                                if (selectedPreviewId != null) {
+                                    previewText = viewModel.getPresetPreview(selectedPreviewId!!)
+                                } else {
+                                    previewText = ""
+                                }
+                            }
+
+                            AlertDialog(
+                                onDismissRequest = { /* Cegah ditutup di luar */ },
+                                title = { Text("Pilih Preset Alokasi") },
+                                text = {
+                                    Column {
+                                        availablePresets.forEach { preset ->
+                                            val isSelected = selectedPreviewId == preset.id
+
+                                            Card(
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .padding(vertical = 4.dp)
+                                                    .clickable { selectedPreviewId = preset.id }
+                                                    .then(
+                                                        if (isSelected) Modifier.border(2.dp, MaterialTheme.colorScheme.primary, RoundedCornerShape(12.dp))
+                                                        else Modifier
+                                                    ),
+                                                colors = CardDefaults.cardColors(
+                                                    containerColor = if (isSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant
+                                                )
+                                            ) {
+                                                Column(modifier = Modifier.padding(16.dp)) {
+                                                    Text(preset.name, style = MaterialTheme.typography.titleMedium)
+
+                                                    // Tampilkan preview persentase jika kartu ini dipilih
+                                                    if (isSelected) {
+                                                        Spacer(modifier = Modifier.padding(top = 8.dp))
+                                                        Text(previewText, style = MaterialTheme.typography.bodyMedium)
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                },
+                                confirmButton = {
+                                    Button(
+                                        onClick = { selectedPreviewId?.let { viewModel.applyPreset(it) } },
+                                        enabled = selectedPreviewId != null // Hanya bisa klik jika sudah pilih
+                                    ) {
+                                        Text("Terapkan")
+                                    }
+                                },
+                                dismissButton = {
+                                    TextButton(onClick = { /* Sengaja dikosongkan */ }) {
+                                        Text("Kembali", color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
+                                    }
+                                }
+                            )
+                        } else {
+                            AppNavigation(
+                                user = currentUser!!,
+                                allocation = currentAllocation,
+                                db = db,
+                                onResetAllocation = { viewModel.resetAllocation() }
+                            )
+                        }
                     }
                 }
             }

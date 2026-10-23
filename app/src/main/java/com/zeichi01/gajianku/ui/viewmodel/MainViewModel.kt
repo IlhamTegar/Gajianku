@@ -3,6 +3,7 @@ package com.zeichi01.gajianku.ui.viewmodel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.zeichi01.gajianku.data.local.AppDatabase
+import com.zeichi01.gajianku.data.local.entity.Preset
 import com.zeichi01.gajianku.data.local.entity.User
 import com.zeichi01.gajianku.data.repository.AllocationRepository
 import com.zeichi01.gajianku.data.repository.PresetRepository
@@ -29,6 +30,9 @@ class MainViewModel(
     private val _currentAllocation = MutableStateFlow<AllocationResult?>(null)
     val currentAllocation: StateFlow<AllocationResult?> = _currentAllocation.asStateFlow()
 
+    private val _availablePresets = MutableStateFlow<List<Preset>>(emptyList())
+    val availablePresets: StateFlow<List<Preset>> = _availablePresets.asStateFlow()
+
     private val _isLoading = MutableStateFlow(true)
     val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
 
@@ -41,13 +45,13 @@ class MainViewModel(
             val user = userDao.getUserOnce()
             _currentUser.value = user
 
-            if (user != null) {
-                // Ambil alokasi bulan ini dari database (jika ada)
-                val currentMonth = allocationRepo.getCurrentMonth()
-                val existingAllocation = allocationRepo.getAllocationByMonth(currentMonth)
+            // Ambil daftar preset (untuk dialog)
+            val presets = presetRepo.getAllPresets().first()
+            _availablePresets.value = presets
 
-                // (Untuk sementara, kita hanya menampilkan alokasi yang sudah tersimpan)
-                // Nanti kita akan buat fitur untuk men-generate alokasi ini.
+            if (user != null) {
+                // Cek apakah alokasi bulan ini sudah ada di database
+                // (Untuk saat ini, setiap buka app kita biarkan user memilih ulang preset)
             }
 
             _isLoading.value = false
@@ -56,47 +60,58 @@ class MainViewModel(
 
     fun saveOnboardingData(name: String, salary: Long) {
         viewModelScope.launch {
-            // 1. Simpan User
             userDao.insert(User(name = name, monthlySalary = salary))
+            loadData() // Refresh data user
+        }
+    }
 
-            // 2. Ambil Preset Default
-            val presets = presetRepo.getAllPresets().first()
-            val defaultPreset = presets.firstOrNull { it.isDefault } ?: presets.firstOrNull()
+    fun applyPreset(presetId: Long) {
+        viewModelScope.launch {
+            val user = _currentUser.value ?: return@launch
 
-            if (defaultPreset != null) {
-                // 3. Hitung Alokasi menggunakan Logic Inti kita
-                val presetItems = presetRepo.getPresetItemsOnce(defaultPreset.id)
-                val categories = presetRepo.getAllCategories().first()
+            val presetItems = presetRepo.getPresetItemsOnce(presetId)
+            val categories = presetRepo.getAllCategories().first()
 
-                val allocationResult = SalaryAllocator.allocate(
-                    salary = salary,
-                    presetItems = presetItems,
-                    categories = categories,
-                    currentDeficit = 0 // Belum ada minus di awal
+            val allocationResult = SalaryAllocator.allocate(
+                salary = user.monthlySalary,
+                presetItems = presetItems,
+                categories = categories,
+                currentDeficit = 0
+            )
+
+            val allocationItems = allocationResult.items.map { item ->
+                com.zeichi01.gajianku.data.local.entity.AllocationItem(
+                    allocationId = 0,
+                    categoryId = item.categoryId,
+                    amount = item.amount
                 )
-
-                // 4. Simpan hasil alokasi ke database
-                val allocationItems = allocationResult.items.map { item ->
-                    com.zeichi01.gajianku.data.local.entity.AllocationItem(
-                        allocationId = 0, // Akan di-generate otomatis oleh insertFullAllocation
-                        categoryId = item.categoryId,
-                        amount = item.amount
-                    )
-                }
-
-                allocationRepo.saveAllocation(
-                    month = allocationRepo.getCurrentMonth(),
-                    salaryAmount = salary,
-                    presetId = defaultPreset.id,
-                    deficitPaid = allocationResult.deficitPaid,
-                    items = allocationItems
-                )
-
-                // 5. Update state agar UI langsung berubah
-                _currentAllocation.value = allocationResult
             }
 
-            loadData() // Refresh data user
+            allocationRepo.saveAllocation(
+                month = allocationRepo.getCurrentMonth(),
+                salaryAmount = user.monthlySalary,
+                presetId = presetId,
+                deficitPaid = allocationResult.deficitPaid,
+                items = allocationItems
+            )
+
+            _currentAllocation.value = allocationResult
+        }
+    }
+
+    fun resetAllocation() {
+        _currentAllocation.value = null
+    }
+
+    // Fungsi BARU: Untuk mengambil teks preview persentase saat user klik preset
+    suspend fun getPresetPreview(presetId: Long): String {
+        val items = presetRepo.getPresetItemsOnce(presetId)
+        val categories = presetRepo.getAllCategories().first()
+        val catMap = categories.associateBy { it.id }
+
+        return items.joinToString("\n") { item ->
+            val catName = catMap[item.categoryId]?.name ?: "Unknown"
+            "• $catName: ${item.percentage.toInt()}%"
         }
     }
 }

@@ -24,14 +24,18 @@ import androidx.navigation.compose.rememberNavController
 import com.zeichi01.gajianku.data.local.AppDatabase
 import com.zeichi01.gajianku.data.local.entity.User
 import com.zeichi01.gajianku.domain.AllocationResult
+import com.zeichi01.gajianku.ui.screen.CatatanScreen
 import com.zeichi01.gajianku.ui.screen.HomeScreen
 import com.zeichi01.gajianku.ui.screen.PlaceholderScreen
-import com.zeichi01.gajianku.ui.screen.PresetScreen
-import com.zeichi01.gajianku.ui.viewmodel.PresetViewModel
+import com.zeichi01.gajianku.ui.screen.TargetScreen
+import com.zeichi01.gajianku.ui.viewmodel.TargetViewModel
+import com.zeichi01.gajianku.ui.viewmodel.CatatanViewModel
+import com.zeichi01.gajianku.ui.screen.ProfileScreen
+import com.zeichi01.gajianku.ui.viewmodel.ProfileViewModel
 
 sealed class Screen(val route: String, val title: String, val icon: ImageVector) {
     object Home : Screen("home", "Home", Icons.Default.Home)
-    object Preset : Screen("preset", "Preset", Icons.Default.List)
+    object Catatan : Screen("catatan", "Catatan", Icons.Default.List)
     object Target : Screen("target", "Target", Icons.Default.Star)
     object Profile : Screen("profile", "Profile", Icons.Default.Person)
 }
@@ -41,22 +45,45 @@ sealed class Screen(val route: String, val title: String, val icon: ImageVector)
 fun AppNavigation(
     user: User,
     allocation: AllocationResult?,
-    db: AppDatabase // Tambahkan parameter db
+    db: AppDatabase,
+    onResetAllocation: () -> Unit
 ) {
     val navController = rememberNavController()
-    val items = listOf(Screen.Home, Screen.Preset, Screen.Target, Screen.Profile)
+    val items = listOf(Screen.Home, Screen.Catatan, Screen.Target, Screen.Profile)
 
-    // Inisialisasi PresetViewModel
-    val presetViewModel: PresetViewModel = viewModel(
+    // 1. Inisialisasi CatatanViewModel (Untuk Catatan & Kategori)
+    val catatanViewModel: CatatanViewModel = viewModel(
         factory = object : ViewModelProvider.Factory {
             override fun <T : ViewModel> create(modelClass: Class<T>): T {
                 @Suppress("UNCHECKED_CAST")
-                return PresetViewModel(db) as T
+                return CatatanViewModel(db) as T
             }
         }
     )
+    val categories by catatanViewModel.categories.collectAsStateWithLifecycle()
+    val expensesThisMonth by catatanViewModel.expensesThisMonth.collectAsStateWithLifecycle()
 
-    val presets by presetViewModel.presets.collectAsStateWithLifecycle()
+    // 2. Inisialisasi TargetViewModel
+    val targetViewModel: TargetViewModel = viewModel(
+        factory = object : ViewModelProvider.Factory {
+            override fun <T : ViewModel> create(modelClass: Class<T>): T {
+                @Suppress("UNCHECKED_CAST")
+                return TargetViewModel(db) as T
+            }
+        }
+    )
+    val activeTargets by targetViewModel.activeTargets.collectAsStateWithLifecycle()
+
+    val profileViewModel: ProfileViewModel = viewModel(
+        factory = object : ViewModelProvider.Factory {
+            override fun <T : ViewModel> create(modelClass: Class<T>): T {
+                @Suppress("UNCHECKED_CAST")
+                return ProfileViewModel(db) as T
+            }
+        }
+    )
+    val emergencyFund by profileViewModel.emergencyFund.collectAsStateWithLifecycle()
+    val emergencyHistory by profileViewModel.emergencyHistory.collectAsStateWithLifecycle()
 
     Scaffold(
         bottomBar = {
@@ -88,22 +115,38 @@ fun AppNavigation(
             modifier = Modifier.padding(innerPadding)
         ) {
             composable(Screen.Home.route) {
-                HomeScreen(user = user, allocation = allocation)
+                HomeScreen(
+                    user = user,
+                    allocation = allocation,
+                    onChangePresetClick = onResetAllocation
+                )
             }
-            composable(Screen.Preset.route) {
-                PresetScreen(
-                    presets = presets,
-                    onPresetClick = { preset ->
-                        // Nanti kita arahkan ke detail preset
-                        // Untuk sekarang kita biarkan kosong atau tampilkan Toast
+            composable(Screen.Catatan.route) {
+                CatatanScreen(
+                    categories = categories,
+                    expenses = expensesThisMonth,
+                    onSaveExpense = { categoryId, amount, note ->
+                        catatanViewModel.addExpense(categoryId, amount, note)
                     }
                 )
             }
             composable(Screen.Target.route) {
-                PlaceholderScreen(title = "Target Tabungan")
+                TargetScreen(
+                    targets = activeTargets,
+                    onAddTarget = { name, amount, priority ->
+                        targetViewModel.addTarget(name, amount, priority)
+                    }
+                )
             }
             composable(Screen.Profile.route) {
-                PlaceholderScreen(title = "Profil & Tabungan Darurat")
+                ProfileScreen(
+                    user = user,
+                    emergencyFund = emergencyFund,
+                    history = emergencyHistory,
+                    onUseFund = { amount, note ->
+                        profileViewModel.useEmergencyFund(amount, note)
+                    }
+                )
             }
         }
     }

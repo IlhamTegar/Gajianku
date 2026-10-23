@@ -74,4 +74,8 @@ class ExpenseRepository(
         val sdf = SimpleDateFormat("yyyy-MM", Locale.getDefault())
         return sdf.format(Date())
     }
+
+    fun getAllExpensesThisMonth(): Flow<List<Expense>> {
+        return expenseDao.getExpensesByMonth(getCurrentMonth())
+    }
 }
