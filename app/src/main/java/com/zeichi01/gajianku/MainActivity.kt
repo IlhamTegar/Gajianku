@@ -1,3 +1,8 @@
+/*
+ * CATATAN PERUBAHAN:
+ * 1. Pemanggilan OnboardingScreen disesuaikan dengan parameter baru (name, bankName).
+ * 2. Parameter 'salary' dihapus dari pemanggilan viewModel.saveOnboardingData.
+ */
 package com.zeichi01.gajianku
 
 import android.os.Bundle
@@ -64,15 +69,13 @@ class MainActivity : ComponentActivity() {
                 } else {
                     if (currentUser == null) {
                         OnboardingScreen(
-                            onSave = { name, salary -> viewModel.saveOnboardingData(name, salary) }
+                            onSave = { name, bankName -> viewModel.saveOnboardingData(name, bankName) }
                         )
                     } else {
                         if (currentAllocation == null && availablePresets.isNotEmpty()) {
-                            // State lokal untuk Dialog Preview
                             var selectedPreviewId by remember { mutableStateOf<Long?>(null) }
                             var previewText by remember { mutableStateOf("") }
 
-                            // Ambil data preview saat user mengklik salah satu preset
                             LaunchedEffect(selectedPreviewId) {
                                 if (selectedPreviewId != null) {
                                     previewText = viewModel.getPresetPreview(selectedPreviewId!!)
@@ -82,7 +85,7 @@ class MainActivity : ComponentActivity() {
                             }
 
                             AlertDialog(
-                                onDismissRequest = { /* Cegah ditutup di luar */ },
+                                onDismissRequest = { },
                                 title = { Text("Pilih Preset Alokasi") },
                                 text = {
                                     Column {
@@ -105,7 +108,6 @@ class MainActivity : ComponentActivity() {
                                                 Column(modifier = Modifier.padding(16.dp)) {
                                                     Text(preset.name, style = MaterialTheme.typography.titleMedium)
 
-                                                    // Tampilkan preview persentase jika kartu ini dipilih
                                                     if (isSelected) {
                                                         Spacer(modifier = Modifier.padding(top = 8.dp))
                                                         Text(previewText, style = MaterialTheme.typography.bodyMedium)
@@ -118,13 +120,13 @@ class MainActivity : ComponentActivity() {
                                 confirmButton = {
                                     Button(
                                         onClick = { selectedPreviewId?.let { viewModel.applyPreset(it) } },
-                                        enabled = selectedPreviewId != null // Hanya bisa klik jika sudah pilih
+                                        enabled = selectedPreviewId != null
                                     ) {
                                         Text("Terapkan")
                                     }
                                 },
                                 dismissButton = {
-                                    TextButton(onClick = { /* Sengaja dikosongkan */ }) {
+                                    TextButton(onClick = { }) {
                                         Text("Kembali", color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
                                     }
                                 }
@@ -134,6 +136,7 @@ class MainActivity : ComponentActivity() {
                                 user = currentUser!!,
                                 allocation = currentAllocation,
                                 db = db,
+                                remainingLivingCost = 0L,
                                 onResetAllocation = { viewModel.resetAllocation() }
                             )
                         }

@@ -46,7 +46,7 @@ import com.zeichi01.gajianku.data.local.entity.User
         EmergencyFundHistory::class,
         Expense::class
     ],
-    version = 3,
+    version = 4,
     exportSchema = false
 )
 @TypeConverters(Converters::class)

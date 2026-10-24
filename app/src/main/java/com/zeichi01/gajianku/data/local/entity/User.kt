@@ -12,5 +12,7 @@ data class User(
 
     val monthlySalary: Long,
 
+    val bankName: String,
+
     val createdAt: Long = System.currentTimeMillis()
 )

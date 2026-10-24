@@ -12,11 +12,18 @@ import androidx.compose.ui.unit.dp
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun OnboardingScreen(
-    onSave: (name: String, salary: Long) -> Unit
+    onSave: (name: String, bankName: String) -> Unit // Parameter gaji dihapus
 ) {
     var name by remember { mutableStateOf("") }
-    var salaryText by remember { mutableStateOf("") }
+    var selectedBank by remember { mutableStateOf<String?>(null) }
+    var expanded by remember { mutableStateOf(false) }
     var errorMsg by remember { mutableStateOf<String?>(null) }
+
+    // Daftar Bank / E-Wallet
+    val bankList = listOf(
+        "BCA", "Mandiri", "BRI", "BNI",
+        "GoPay", "OVO", "DANA", "ShopeePay"
+    )
 
     Scaffold { padding ->
         Column(
@@ -33,7 +40,7 @@ fun OnboardingScreen(
             )
             Spacer(modifier = Modifier.height(8.dp))
             Text(
-                text = "Mari atur keuanganmu dari sekarang.",
+                text = "Mari atur keuanganmu secara otomatis.",
                 style = MaterialTheme.typography.bodyMedium
             )
 
@@ -49,19 +56,33 @@ fun OnboardingScreen(
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            OutlinedTextField(
-                value = salaryText,
-                onValueChange = {
-                    if (it.all { char -> char.isDigit() }) {
-                        salaryText = it
+            // Dropdown Pilih Bank
+            ExposedDropdownMenuBox(
+                expanded = expanded,
+                onExpandedChange = { expanded = !expanded }
+            ) {
+                OutlinedTextField(
+                    value = selectedBank ?: "Pilih Bank / E-Wallet",
+                    onValueChange = {},
+                    readOnly = true,
+                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
+                    modifier = Modifier.menuAnchor().fillMaxWidth()
+                )
+                ExposedDropdownMenu(
+                    expanded = expanded,
+                    onDismissRequest = { expanded = false }
+                ) {
+                    bankList.forEach { bank ->
+                        DropdownMenuItem(
+                            text = { Text(bank) },
+                            onClick = {
+                                selectedBank = bank
+                                expanded = false
+                            }
+                        )
                     }
-                },
-                label = { Text("Gaji Bulanan (Rp)") },
-                modifier = Modifier.fillMaxWidth(),
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                singleLine = true,
-                isError = errorMsg != null
-            )
+                }
+            }
 
             if (errorMsg != null) {
                 Text(
@@ -75,13 +96,12 @@ fun OnboardingScreen(
 
             Button(
                 onClick = {
-                    val salary = salaryText.toLongOrNull()
                     if (name.isBlank()) {
                         errorMsg = "Nama tidak boleh kosong"
-                    } else if (salary == null || salary <= 0) {
-                        errorMsg = "Gaji harus berupa angka lebih dari 0"
+                    } else if (selectedBank == null) {
+                        errorMsg = "Pilih Bank atau E-Wallet"
                     } else {
-                        onSave(name, salary)
+                        onSave(name, selectedBank!!)
                     }
                 },
                 modifier = Modifier.fillMaxWidth()

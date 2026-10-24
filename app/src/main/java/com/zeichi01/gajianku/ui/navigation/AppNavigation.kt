@@ -46,6 +46,7 @@ fun AppNavigation(
     user: User,
     allocation: AllocationResult?,
     db: AppDatabase,
+    remainingLivingCost: Long,
     onResetAllocation: () -> Unit
 ) {
     val navController = rememberNavController()
