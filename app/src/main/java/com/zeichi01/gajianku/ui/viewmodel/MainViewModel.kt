@@ -54,9 +54,44 @@ class MainViewModel(
             val presets = presetRepo.getAllPresets().first()
             _availablePresets.value = presets
 
-            if (user != null && user.monthlySalary > 0) {
-                // Nanti di sini kita akan memuat alokasi yang sudah ada
-                // Saat ini dibiarkan kosong karena gaji belum terdeteksi
+            if (user != null) {
+                // --- PERBAIKAN: Cek apakah alokasi bulan ini sudah ada di database ---
+                val currentMonth = allocationRepo.getCurrentMonth()
+                val existingAllocation = allocationRepo.getAllocationByMonth(currentMonth)
+
+                if (existingAllocation != null) {
+                    // Jika sudah ada, kita rekonstruksi data alokasi untuk ditampilkan di UI
+                    val items = allocationRepo.getItemsByAllocationOnce(existingAllocation.id)
+                    val categories = presetRepo.getAllCategories().first()
+
+                    // Ubah AllocationItem kembali ke format AllocatedItem agar bisa dibaca UI
+                    val allocatedItems = items.map { item ->
+                        val cat = categories.find { it.id == item.categoryId }
+                        com.zeichi01.gajianku.domain.AllocatedItem(
+                            categoryId = item.categoryId,
+                            categoryName = cat?.name ?: "Unknown",
+                            percentage = 0f, // Tidak terlalu penting untuk UI saat ini
+                            amount = item.amount,
+                            isSavingsPocket = cat?.isSavingsPocket ?: false
+                        )
+                    }
+
+                    // Hitung ulang total tabungan (wajib & darurat) untuk data di UI
+                    val savingsWajib = allocatedItems.find { it.categoryName == "Tabungan Wajib" }?.amount ?: 0L
+                    val savingsDarurat = allocatedItems.find { it.categoryName == "Tabungan Darurat" }?.amount ?: 0L
+
+                    _currentAllocation.value = AllocationResult(
+                        salaryAmount = existingAllocation.salaryAmount,
+                        items = allocatedItems,
+                        totalSavingsPocket = savingsWajib + savingsDarurat,
+                        savingsWajibAmount = savingsWajib,
+                        savingsDaruratAmount = savingsDarurat,
+                        deficitPaid = existingAllocation.deficitPaid
+                    )
+                } else {
+                    // Jika belum ada, biarkan null agar dialog preset muncul
+                    _currentAllocation.value = null
+                }
             }
 
             _isLoading.value = false

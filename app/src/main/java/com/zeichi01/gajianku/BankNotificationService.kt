@@ -5,9 +5,16 @@ import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
 import android.util.Log
 import com.zeichi01.gajianku.data.local.AppDatabase
+import com.zeichi01.gajianku.data.local.entity.AllocationItem
+import com.zeichi01.gajianku.data.local.entity.User
+import com.zeichi01.gajianku.data.repository.AllocationRepository
+import com.zeichi01.gajianku.data.repository.EmergencyFundRepository
+import com.zeichi01.gajianku.data.repository.PresetRepository
 import com.zeichi01.gajianku.domain.BankNotificationParser
+import com.zeichi01.gajianku.domain.SalaryAllocator
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 class BankNotificationService : NotificationListenerService() {
@@ -18,50 +25,87 @@ class BankNotificationService : NotificationListenerService() {
     override fun onNotificationPosted(sbn: StatusBarNotification) {
         super.onNotificationPosted(sbn)
 
-        // 1. Ambil package name aplikasi yang mengirim notifikasi
         val packageName = sbn.packageName ?: return
-
-        // 2. Ambil isi teks notifikasi
         val extras = sbn.notification.extras
         val title = extras.getString(Notification.EXTRA_TITLE) ?: ""
         val text = extras.getString(Notification.EXTRA_TEXT) ?: ""
         val fullText = "$title $text"
 
-        // 3. Ambil data user dari database untuk mengecek Bank pilihannya
+        // Daftar package bank (Bisa kamu tambah sendiri sesuai kebutuhan)
+        val validPackages = mapOf(
+            "com.bca" to "BCA",
+            "com.instagram.android" to "BCA",
+            "com.gojek.gopay" to "GoPay",
+            "id.co.bri.brimo" to "BRI",
+            "com.bankmandiri.mandiri" to "Mandiri"
+        )
+
         scope.launch {
             val user = db.userDao().getUserOnce() ?: return@launch
-
-            // Daftar package bank (contoh, nanti bisa dikembangkan)
-            val validPackages = mapOf(
-                "com.bca" to "BCA",
-                "com.gojek.gopay" to "GoPay",
-                "id.co.bri.brimo" to "BRI"
-                // Nanti tambahkan package lain sesuai kebutuhan
-            )
-
-            // Cek apakah notifikasi ini dari bank yang sesuai pilihan user
-            // (Asumsi: kita menyimpan nama bank di user.bankName, misal "BCA")
             val senderBank = validPackages[packageName]
 
+            // Cek apakah notifikasi dari Bank yang dipilih user
             if (senderBank != null && senderBank == user.bankName) {
-                Log.d("NotifListener", "Notif Bank Terdeteksi: $fullText")
 
-                // Cek apakah ini transaksi masuk
                 if (BankNotificationParser.isIncomingTransaction(fullText)) {
                     val amount = BankNotificationParser.parseAmount(fullText)
 
-                    if (amount != null) {
-                        // Cek apakah ini awal bulan (Gaji) atau bukan
+                    if (amount != null && amount > 0) {
+                        Log.d("NotifListener", "Transaksi Masuk: Rp $amount")
+
                         if (BankNotificationParser.isEarlyMonth()) {
-                            Log.d("NotifListener", "GAJI TERDETEKSI: Rp $amount")
-                            // TODO: Simpan sebagai gaji dan picu alokasi
+                            // --- KASUS 1: GAJI MASUK (Tanggal 1-10) ---
+                            Log.d("NotifListener", "GAJI TERDETEKSI! Memproses alokasi...")
+                            processSalary(user, amount)
                         } else {
-                            Log.d("NotifListener", "PEMASUKAN LAIN: Rp $amount (Masuk ke Tabungan)")
-                            // TODO: Masukkan ke tabungan
+                            // --- KASUS 2: PEMASUKAN LAIN (Tanggal > 10) ---
+                            Log.d("NotifListener", "Pemasukan lain. Masuk ke Tabungan Darurat.")
+                            val emergencyRepo = EmergencyFundRepository(db.emergencyFundDao())
+                            emergencyRepo.addFunds(amount, "Pemasukan otomatis dari $senderBank")
                         }
                     }
                 }
             }
         }
+    }
+
+    private suspend fun processSalary(user: User, amount: Long) {
+        // 1. Update gaji user
+        db.userDao().update(user.copy(monthlySalary = amount))
+
+        // 2. Ambil preset default & kategori
+        val presetRepo = PresetRepository(db.presetDao(), db.categoryDao())
+        val allocationRepo = AllocationRepository(db.allocationDao())
+
+        val presets = presetRepo.getAllPresets().first()
+        val defaultPreset = presets.firstOrNull { it.isDefault } ?: presets.firstOrNull() ?: return
+
+        val presetItems = presetRepo.getPresetItemsOnce(defaultPreset.id)
+        val categories = presetRepo.getAllCategories().first()
+
+        // 3. Hitung Alokasi
+        val allocationResult = SalaryAllocator.allocate(
+            salary = amount,
+            presetItems = presetItems,
+            categories = categories,
+            currentDeficit = 0 // (Nanti kita ambil dari DB jika ada minus)
+        )
+
+        // 4. Simpan Alokasi ke Database
+        val allocationItems = allocationResult.items.map { item ->
+            AllocationItem(
+                allocationId = 0,
+                categoryId = item.categoryId,
+                amount = item.amount
+            )
+        }
+
+        allocationRepo.saveAllocation(
+            month = allocationRepo.getCurrentMonth(),
+            salaryAmount = amount,
+            presetId = defaultPreset.id,
+            deficitPaid = allocationResult.deficitPaid,
+            items = allocationItems
+        )
     }
 }
