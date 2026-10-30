@@ -8,15 +8,17 @@ object BankNotificationParser {
      * Contoh teks GoPay: "Kamu menerima Rp 50.000 dari Budi"
      */
     fun parseAmount(text: String): Long? {
-        // Regex untuk mencari format "Rp 5.000.000", "IDR 50,000", atau "Rp50000"
-        val regex = Regex("""(?:Rp|IDR)\.?\s?([\d.,]+)""", RegexOption.IGNORE_CASE)
-        val match = regex.find(text) ?: return null
+        // 1. Bersihkan teks dari karakter aneh (_ atau -) yang bisa mengganggu
+        val cleanText = text.replace("_", " ").replace("-", " ")
 
-        // Ambil angkanya saja (misal: "5.000.000" atau "50,000")
+        // 2. Regex mencari "Rp" diikuti angka (mendukung spasi, titik, koma)
+        val regex = Regex("""(?:Rp|IDR)\.?\s?([\d.,]+)""", RegexOption.IGNORE_CASE)
+        val match = regex.find(cleanText) ?: return null
+
+        // 3. Ambil angkanya saja
         var amountStr = match.groupValues[1]
 
-        // Bersihkan titik atau koma (tergantung format bank)
-        // Asumsi: titik adalah pemisah ribuan, koma adalah desimal (standar Indonesia)
+        // 4. Bersihkan titik atau koma
         amountStr = amountStr.replace(".", "").replace(",", ".")
 
         return amountStr.toDoubleOrNull()?.toLong()
