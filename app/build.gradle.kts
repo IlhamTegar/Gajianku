@@ -40,7 +40,9 @@ android {
 val roomVersion = "2.8.5"
 
 dependencies {
-    implementation(platform(libs.androidx.compose.bom))
+    // Paksa semua library Compose menggunakan versi yang sama (BOM)
+    implementation(platform("androidx.compose:compose-bom:2024.12.01"))
+
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.compose.material3)
     implementation(libs.androidx.compose.ui)
@@ -49,13 +51,7 @@ dependencies {
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(libs.androidx.lifecycle.runtime.ktx)
-    testImplementation(libs.junit)
-    androidTestImplementation(platform(libs.androidx.compose.bom))
-    androidTestImplementation(libs.androidx.compose.ui.test.junit4)
-    androidTestImplementation(libs.androidx.espresso.core)
-    androidTestImplementation(libs.androidx.junit)
-    debugImplementation(libs.androidx.compose.ui.test.manifest)
-    debugImplementation(libs.androidx.compose.ui.tooling)
+    implementation("androidx.compose.material:material-icons-extended")
 
     // Room
     implementation("androidx.room:room-runtime:$roomVersion")
@@ -64,23 +60,29 @@ dependencies {
     // Coroutines
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.0")
 
-    // Unit Testing
-    testImplementation("junit:junit:4.13.2")
-    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.8.0")
-    testImplementation("io.mockk:mockk:1.13.5")
-    testImplementation("io.mockk:mockk-agent-jvm:1.13.5")
-
     // ViewModel Compose
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.7")
 
     // Navigation Compose
     implementation("androidx.navigation:navigation-compose:2.8.5")
 
-    // Paksa semua library Compose menggunakan versi yang sama dari BOM
-    implementation(platform("androidx.compose:compose-bom:2024.12.01"))
-
-    implementation("androidx.compose.material:material-icons-extended")
-
     // Lifecycle Compose
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.8.7")
+
+    // Library Drag and Drop (Versi ini kompatibel dengan Compose BOM di atas)
+    implementation("sh.calvin.reorderable:reorderable:2.4.0")
+
+    // Unit Testing
+    testImplementation(libs.junit)
+    testImplementation("junit:junit:4.13.2")
+    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.8.0")
+    testImplementation("io.mockk:mockk:1.13.5")
+    testImplementation("io.mockk:mockk-agent-jvm:1.13.5")
+
+    androidTestImplementation(platform("androidx.compose:compose-bom:2024.12.01"))
+    androidTestImplementation(libs.androidx.compose.ui.test.junit4)
+    androidTestImplementation(libs.androidx.espresso.core)
+    androidTestImplementation(libs.androidx.junit)
+    debugImplementation(libs.androidx.compose.ui.test.manifest)
+    debugImplementation(libs.androidx.compose.ui.tooling)
 }

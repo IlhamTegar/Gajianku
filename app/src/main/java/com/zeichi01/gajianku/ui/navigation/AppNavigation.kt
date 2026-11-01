@@ -26,12 +26,11 @@ import com.zeichi01.gajianku.data.local.entity.User
 import com.zeichi01.gajianku.domain.AllocationResult
 import com.zeichi01.gajianku.ui.screen.CatatanScreen
 import com.zeichi01.gajianku.ui.screen.HomeScreen
-import com.zeichi01.gajianku.ui.screen.PlaceholderScreen
-import com.zeichi01.gajianku.ui.screen.TargetScreen
-import com.zeichi01.gajianku.ui.viewmodel.TargetViewModel
-import com.zeichi01.gajianku.ui.viewmodel.CatatanViewModel
 import com.zeichi01.gajianku.ui.screen.ProfileScreen
+import com.zeichi01.gajianku.ui.screen.TargetScreen
+import com.zeichi01.gajianku.ui.viewmodel.CatatanViewModel
 import com.zeichi01.gajianku.ui.viewmodel.ProfileViewModel
+import com.zeichi01.gajianku.ui.viewmodel.TargetViewModel
 
 sealed class Screen(val route: String, val title: String, val icon: ImageVector) {
     object Home : Screen("home", "Home", Icons.Default.Home)
@@ -46,13 +45,12 @@ fun AppNavigation(
     user: User,
     allocation: AllocationResult?,
     db: AppDatabase,
-    remainingLivingCost: Long,
     onResetAllocation: () -> Unit
 ) {
     val navController = rememberNavController()
     val items = listOf(Screen.Home, Screen.Catatan, Screen.Target, Screen.Profile)
 
-    // 1. Inisialisasi CatatanViewModel (Untuk Catatan & Kategori)
+    // 1. CatatanViewModel
     val catatanViewModel: CatatanViewModel = viewModel(
         factory = object : ViewModelProvider.Factory {
             override fun <T : ViewModel> create(modelClass: Class<T>): T {
@@ -63,8 +61,10 @@ fun AppNavigation(
     )
     val categories by catatanViewModel.categories.collectAsStateWithLifecycle()
     val expensesThisMonth by catatanViewModel.expensesThisMonth.collectAsStateWithLifecycle()
+    val remainingLivingCost by catatanViewModel.remainingLivingCost.collectAsStateWithLifecycle()
+    val totalInvestment by catatanViewModel.totalInvestment.collectAsStateWithLifecycle()
 
-    // 2. Inisialisasi TargetViewModel
+    // 2. TargetViewModel
     val targetViewModel: TargetViewModel = viewModel(
         factory = object : ViewModelProvider.Factory {
             override fun <T : ViewModel> create(modelClass: Class<T>): T {
@@ -74,7 +74,9 @@ fun AppNavigation(
         }
     )
     val activeTargets by targetViewModel.activeTargets.collectAsStateWithLifecycle()
+    val totalCollected by targetViewModel.totalCollected.collectAsStateWithLifecycle()
 
+    // 3. ProfileViewModel
     val profileViewModel: ProfileViewModel = viewModel(
         factory = object : ViewModelProvider.Factory {
             override fun <T : ViewModel> create(modelClass: Class<T>): T {
@@ -126,16 +128,29 @@ fun AppNavigation(
                 CatatanScreen(
                     categories = categories,
                     expenses = expensesThisMonth,
+                    remainingLivingCost = remainingLivingCost,
+                    totalInvestment = totalInvestment,
                     onSaveExpense = { categoryId, amount, note ->
                         catatanViewModel.addExpense(categoryId, amount, note)
+                    },
+                    onDeleteExpense = { expense ->
+                        catatanViewModel.deleteExpense(expense)
                     }
                 )
             }
             composable(Screen.Target.route) {
                 TargetScreen(
                     targets = activeTargets,
+                    totalCollected = totalCollected,
                     onAddTarget = { name, amount, priority ->
                         targetViewModel.addTarget(name, amount, priority)
+                    },
+                    onDeleteTarget = { target ->
+                        targetViewModel.deleteTarget(target)
+                    },
+                    // TAMBAHKAN BARIS INI UNTUK MENGHILANGKAN ERROR DRAG-AND-DROP
+                    onReorder = { reorderedTargets ->
+                        targetViewModel.updateTargetOrder(reorderedTargets)
                     }
                 )
             }

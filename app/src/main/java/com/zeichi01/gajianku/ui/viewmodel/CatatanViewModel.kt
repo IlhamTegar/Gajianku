@@ -5,10 +5,14 @@ import androidx.lifecycle.viewModelScope
 import com.zeichi01.gajianku.data.local.AppDatabase
 import com.zeichi01.gajianku.data.local.entity.Category
 import com.zeichi01.gajianku.data.local.entity.Expense
+import com.zeichi01.gajianku.data.repository.AllocationRepository
 import com.zeichi01.gajianku.data.repository.ExpenseRepository
 import com.zeichi01.gajianku.data.repository.PresetRepository
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
@@ -19,6 +23,17 @@ class CatatanViewModel(
 
     private val presetRepo = PresetRepository(db.presetDao(), db.categoryDao())
     private val expenseRepo = ExpenseRepository(db.expenseDao())
+    private val allocationRepo = AllocationRepository(db.allocationDao())
+    // Tambahkan State untuk Sisa Saldo Biaya Hidup
+    private val _remainingLivingCost = MutableStateFlow<Long>(0L)
+    val remainingLivingCost: StateFlow<Long> = _remainingLivingCost.asStateFlow()
+    private val _totalInvestment = MutableStateFlow<Long>(0L)
+    val totalInvestment: StateFlow<Long> = _totalInvestment.asStateFlow()
+
+    init {
+        // Panggil fungsi hitung saat ViewModel dibuat
+        calculateRemainingLivingCost()
+    }
 
     val categories: StateFlow<List<Category>> = presetRepo.getAllCategories()
         .stateIn(
@@ -41,6 +56,38 @@ class CatatanViewModel(
                 amount = amount,
                 note = note
             )
+        }
+    }
+
+    fun calculateRemainingLivingCost() {
+        viewModelScope.launch {
+            val currentMonth = allocationRepo.getCurrentMonth()
+            val allocation = allocationRepo.getAllocationByMonth(currentMonth) ?: return@launch
+
+            val items = allocationRepo.getItemsByAllocationOnce(allocation.id)
+            val categories = presetRepo.getAllCategories().first()
+
+            // --- 1. Hitung Sisa Biaya Hidup ---
+            val biayaHidupCat = categories.find { it.name == "Biaya Hidup" }
+            if (biayaHidupCat != null) {
+                val allocatedAmount = items.find { it.categoryId == biayaHidupCat.id }?.amount ?: 0L
+                val expenses = expenseRepo.getTotalByCategory(currentMonth, biayaHidupCat.id).first()
+                _remainingLivingCost.value = allocatedAmount - expenses
+            }
+
+            // --- 2. Hitung Total Investasi ---
+            val investasiCat = categories.find { it.name == "Investasi" }
+            if (investasiCat != null) {
+                val totalInvest = expenseRepo.getTotalByCategory(currentMonth, investasiCat.id).first()
+                _totalInvestment.value = totalInvest
+            }
+        }
+    }
+
+    fun deleteExpense(expense: Expense) {
+        viewModelScope.launch {
+            expenseRepo.deleteExpense(expense)
+            calculateRemainingLivingCost() // Hitung ulang saldo setelah dihapus
         }
     }
 }

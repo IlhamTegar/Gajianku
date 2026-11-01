@@ -7,6 +7,7 @@ import com.zeichi01.gajianku.data.local.entity.SavingsTarget
 import com.zeichi01.gajianku.data.repository.SavingsRepository
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
@@ -31,6 +32,31 @@ class TargetViewModel(
                 targetAmount = amount,
                 priority = priority
             )
+        }
+    }
+
+    // Di TargetViewModel.kt
+    fun updateTargetOrder(reorderedTargets: List<SavingsTarget>) {
+        viewModelScope.launch {
+            reorderedTargets.forEachIndexed { index, target ->
+                val updatedTarget = target.copy(sortOrder = index)
+                targetRepo.updateTarget(updatedTarget) // Pastikan fungsi ini ada di Repository
+            }
+        }
+    }
+
+    // Di dalam class TargetViewModel, tambahkan:
+    val totalCollected: StateFlow<Long> = activeTargets
+        .map { targets -> targets.sumOf { it.currentAmount } }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = 0L
+        )
+
+    fun deleteTarget(target: SavingsTarget) {
+        viewModelScope.launch {
+            targetRepo.deleteTarget(target)
         }
     }
 }

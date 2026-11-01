@@ -1,3 +1,8 @@
+/*
+ * CATATAN PERUBAHAN:
+ * 1. Menghapus parameter remainingLivingCost.
+ * 2. Menghapus Card "Sisa Biaya Hidup" dari LazyColumn.
+ */
 package com.zeichi01.gajianku.ui.screen
 
 import androidx.compose.foundation.Canvas
@@ -17,7 +22,6 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.zeichi01.gajianku.data.local.entity.User
 import com.zeichi01.gajianku.domain.AllocationResult
 import java.text.NumberFormat
@@ -81,26 +85,22 @@ fun HomeScreen(
                     Spacer(modifier = Modifier.height(16.dp))
                 }
 
-                // --- BAGIAN 3: GRAFIK & LEGENDA (KIRI & KANAN) ---
+                // --- BAGIAN 3: GRAFIK & LEGENDA ---
                 item {
                     val colors = listOf(
-                        Color(0xFFE57373), // Merah
-                        Color(0xFF64B5F6), // Biru
-                        Color(0xFF81C784), // Hijau
-                        Color(0xFFFFB74D), // Oranye
-                        Color(0xFFBA68C8), // Ungu
-                        Color(0xFF90A4AE)  // Abu-abu
+                        Color(0xFFE57373), Color(0xFF64B5F6), Color(0xFF81C784),
+                        Color(0xFFFFB74D), Color(0xFFBA68C8), Color(0xFF90A4AE)
                     )
                     val total = allocation.items.sumOf { it.amount }.toFloat()
 
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically // Agar sejajar tengah
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        // KIRI: Grafik Donut (Ukuran diperkecil sedikit agar muat)
+                        // KIRI: Grafik Donut
                         Box(
                             modifier = Modifier
-                                .weight(1f) // Ambil 1 bagian ruang
+                                .weight(1f)
                                 .height(150.dp),
                             contentAlignment = Alignment.Center
                         ) {
@@ -122,9 +122,8 @@ fun HomeScreen(
                                         startAngle += sweepAngle
                                     }
 
-                                    // Lubang Donut
                                     drawCircle(
-                                        color = Color.White, // Sesuaikan dengan background
+                                        color = Color.White,
                                         radius = size.width / 3.5f,
                                         center = centerOffset
                                     )
@@ -134,9 +133,9 @@ fun HomeScreen(
 
                         Spacer(modifier = Modifier.width(16.dp))
 
-                        // KANAN: Legenda & Persentase
+                        // KANAN: Legenda
                         Column(
-                            modifier = Modifier.weight(1.2f), // Ambil sedikit lebih banyak ruang untuk teks
+                            modifier = Modifier.weight(1.2f),
                             verticalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
                             allocation.items.forEachIndexed { index, item ->
@@ -145,22 +144,17 @@ fun HomeScreen(
                                     verticalAlignment = Alignment.CenterVertically,
                                     modifier = Modifier.fillMaxWidth()
                                 ) {
-                                    // Titik Warna
                                     Box(
                                         modifier = Modifier
                                             .size(10.dp)
                                             .background(colors.getOrElse(index) { Color.Gray }, CircleShape)
                                     )
                                     Spacer(modifier = Modifier.width(8.dp))
-
-                                    // Nama Kategori
                                     Text(
                                         text = item.categoryName,
                                         modifier = Modifier.weight(1f),
-                                        style = MaterialTheme.typography.bodySmall // Dikecilkan sedikit
+                                        style = MaterialTheme.typography.bodySmall
                                     )
-
-                                    // Persentase
                                     Text(
                                         text = "$percentage%",
                                         style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold)
@@ -172,13 +166,12 @@ fun HomeScreen(
                     Spacer(modifier = Modifier.height(24.dp))
                 }
 
-                // --- BAGIAN 4: JUDUL RINCIAN NOMINAL ---
+                // --- BAGIAN 4: RINCIAN NOMINAL ---
                 item {
                     Text("Rincian Nominal:", style = MaterialTheme.typography.titleSmall)
                     Spacer(modifier = Modifier.height(8.dp))
                 }
 
-                // --- BAGIAN 5: DAFTAR KARTU NOMINAL ---
                 items(allocation.items) { item ->
                     Card(modifier = Modifier.fillMaxWidth()) {
                         Row(

@@ -1,8 +1,9 @@
 /*
  * CATATAN PERUBAHAN:
- * 1. Fungsi saveOnboardingData sekarang menerima (name: String, bankName: String).
- * 2. Gaji (monthlySalary) di-set ke 0 untuk sementara karena akan diisi otomatis oleh sistem deteksi nanti.
- * 3. Parameter bankName dimasukkan ke dalam entity User.
+ * 1. Menambahkan ExpenseRepository.
+ * 2. Menambahkan state _remainingLivingCost untuk menyimpan sisa biaya hidup.
+ * 3. Menambahkan fungsi calculateRemainingLivingCost().
+ * 4. Memanggil calculateRemainingLivingCost() di loadData() dan applyPreset().
  */
 package com.zeichi01.gajianku.ui.viewmodel
 
@@ -12,6 +13,7 @@ import com.zeichi01.gajianku.data.local.AppDatabase
 import com.zeichi01.gajianku.data.local.entity.Preset
 import com.zeichi01.gajianku.data.local.entity.User
 import com.zeichi01.gajianku.data.repository.AllocationRepository
+import com.zeichi01.gajianku.data.repository.ExpenseRepository
 import com.zeichi01.gajianku.data.repository.PresetRepository
 import com.zeichi01.gajianku.domain.AllocationResult
 import com.zeichi01.gajianku.domain.SalaryAllocator
@@ -28,6 +30,7 @@ class MainViewModel(
     private val userDao = db.userDao()
     private val presetRepo = PresetRepository(db.presetDao(), db.categoryDao())
     private val allocationRepo = AllocationRepository(db.allocationDao())
+    private val expenseRepo = ExpenseRepository(db.expenseDao())
 
     // State untuk UI
     private val _currentUser = MutableStateFlow<User?>(null)
@@ -38,6 +41,9 @@ class MainViewModel(
 
     private val _availablePresets = MutableStateFlow<List<Preset>>(emptyList())
     val availablePresets: StateFlow<List<Preset>> = _availablePresets.asStateFlow()
+
+    private val _remainingLivingCost = MutableStateFlow<Long>(0L)
+    val remainingLivingCost: StateFlow<Long> = _remainingLivingCost.asStateFlow()
 
     private val _isLoading = MutableStateFlow(true)
     val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
@@ -60,23 +66,21 @@ class MainViewModel(
                 val existingAllocation = allocationRepo.getAllocationByMonth(currentMonth)
 
                 if (existingAllocation != null) {
-                    // Jika sudah ada, kita rekonstruksi data alokasi untuk ditampilkan di UI
+                    // Jika sudah ada, muat datanya ke UI
                     val items = allocationRepo.getItemsByAllocationOnce(existingAllocation.id)
                     val categories = presetRepo.getAllCategories().first()
 
-                    // Ubah AllocationItem kembali ke format AllocatedItem agar bisa dibaca UI
                     val allocatedItems = items.map { item ->
                         val cat = categories.find { it.id == item.categoryId }
                         com.zeichi01.gajianku.domain.AllocatedItem(
                             categoryId = item.categoryId,
                             categoryName = cat?.name ?: "Unknown",
-                            percentage = 0f, // Tidak terlalu penting untuk UI saat ini
+                            percentage = 0f,
                             amount = item.amount,
                             isSavingsPocket = cat?.isSavingsPocket ?: false
                         )
                     }
 
-                    // Hitung ulang total tabungan (wajib & darurat) untuk data di UI
                     val savingsWajib = allocatedItems.find { it.categoryName == "Tabungan Wajib" }?.amount ?: 0L
                     val savingsDarurat = allocatedItems.find { it.categoryName == "Tabungan Darurat" }?.amount ?: 0L
 
@@ -89,7 +93,7 @@ class MainViewModel(
                         deficitPaid = existingAllocation.deficitPaid
                     )
                 } else {
-                    // Jika belum ada, biarkan null agar dialog preset muncul
+                    // Jika belum ada (misal bulan baru atau user baru), biarkan null agar pop-up muncul
                     _currentAllocation.value = null
                 }
             }
@@ -100,7 +104,6 @@ class MainViewModel(
 
     fun saveOnboardingData(name: String, bankName: String) {
         viewModelScope.launch {
-            // Simpan user dengan gaji 0 sementara (menunggu deteksi notifikasi)
             userDao.insert(User(name = name, monthlySalary = 0, bankName = bankName))
             loadData()
         }
@@ -110,7 +113,6 @@ class MainViewModel(
         viewModelScope.launch {
             val user = _currentUser.value ?: return@launch
 
-            // Karena gaji masih 0, kita buat alokasi dummy untuk preview UI
             val salaryToAllocate = if (user.monthlySalary > 0) user.monthlySalary else 10000000L
 
             val presetItems = presetRepo.getPresetItemsOnce(presetId)
@@ -131,7 +133,6 @@ class MainViewModel(
                 )
             }
 
-            // Hanya simpan ke DB jika gaji sudah terdeteksi (bukan dummy)
             if (user.monthlySalary > 0) {
                 allocationRepo.saveAllocation(
                     month = allocationRepo.getCurrentMonth(),
@@ -143,11 +144,13 @@ class MainViewModel(
             }
 
             _currentAllocation.value = allocationResult
+            calculateRemainingLivingCost()
         }
     }
 
     fun resetAllocation() {
         _currentAllocation.value = null
+        _remainingLivingCost.value = 0L
     }
 
     suspend fun getPresetPreview(presetId: Long): String {
@@ -158,6 +161,24 @@ class MainViewModel(
         return items.joinToString("\n") { item ->
             val catName = catMap[item.categoryId]?.name ?: "Unknown"
             "• $catName: ${item.percentage.toInt()}%"
+        }
+    }
+
+    private fun calculateRemainingLivingCost() {
+        viewModelScope.launch {
+            val allocation = _currentAllocation.value ?: return@launch
+            val categories = presetRepo.getAllCategories().first()
+
+            val biayaHidupCat = categories.find { it.name == "Biaya Hidup" } ?: return@launch
+
+            val allocatedAmount = allocation.items.find { it.categoryId == biayaHidupCat.id }?.amount ?: 0L
+
+            val expenses = expenseRepo.getTotalByCategory(
+                month = allocationRepo.getCurrentMonth(),
+                categoryId = biayaHidupCat.id
+            ).first()
+
+            _remainingLivingCost.value = allocatedAmount - expenses
         }
     }
 }

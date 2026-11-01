@@ -6,6 +6,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -24,7 +25,10 @@ import java.util.*
 fun CatatanScreen(
     categories: List<Category>,
     expenses: List<Expense>,
-    onSaveExpense: (Long, Long, String) -> Unit
+    remainingLivingCost: Long,
+    totalInvestment: Long,
+    onSaveExpense: (Long, Long, String) -> Unit,
+    onDeleteExpense: (Expense) -> Unit
 ) {
     var showDialog by remember { mutableStateOf(false) }
     val formatter = NumberFormat.getCurrencyInstance(Locale("in", "ID"))
@@ -45,18 +49,68 @@ fun CatatanScreen(
             }
         }
     ) { padding ->
-        if (expenses.isEmpty()) {
-            Box(modifier = Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
-                Text("Belum ada catatan pengeluaran bulan ini.")
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding),
+            contentPadding = PaddingValues(16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            // --- CARD SALDO BIAYA HIDUP (DI PALING ATAS) ---
+            item {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    // KIRI: Sisa Biaya Hidup
+                    Card(
+                        modifier = Modifier.weight(1f),
+                        colors = CardDefaults.cardColors(
+                            containerColor = if (remainingLivingCost < 0) MaterialTheme.colorScheme.errorContainer else MaterialTheme.colorScheme.primaryContainer
+                        )
+                    ) {
+                        Column(modifier = Modifier.padding(12.dp)) {
+                            Text(
+                                "Sisa Biaya Hidup",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = if (remainingLivingCost < 0) MaterialTheme.colorScheme.onErrorContainer else MaterialTheme.colorScheme.onPrimaryContainer
+                            )
+                            Text(
+                                text = formatter.format(remainingLivingCost),
+                                style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
+                                color = if (remainingLivingCost < 0) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
+                            )
+                        }
+                    }
+
+                    // KANAN: Total Investasi
+                    Card(
+                        modifier = Modifier.weight(1f),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                    ) {
+                        Column(modifier = Modifier.padding(12.dp)) {
+                            Text(
+                                "Total Investasi",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Text(
+                                text = formatter.format(totalInvestment),
+                                style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                }
             }
-        } else {
-            LazyColumn(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(padding),
-                contentPadding = PaddingValues(16.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
+
+            if (expenses.isEmpty()) {
+                item {
+                    Box(modifier = Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
+                        Text("Belum ada catatan pengeluaran bulan ini.")
+                    }
+                }
+            } else {
                 // Iterasi setiap tanggal
                 groupedExpenses.forEach { (dateString, dailyExpenses) ->
                     item {
@@ -71,6 +125,7 @@ fun CatatanScreen(
                     // Iterasi pengeluaran di tanggal tersebut
                     items(dailyExpenses) { expense ->
                         val categoryName = categories.find { it.id == expense.categoryId }?.name ?: "Lainnya"
+                        var showDeleteConfirm by remember { mutableStateOf(false) }
 
                         Card(modifier = Modifier.fillMaxWidth()) {
                             Row(
@@ -80,17 +135,44 @@ fun CatatanScreen(
                                 horizontalArrangement = Arrangement.SpaceBetween,
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Column {
+                                Column(modifier = Modifier.weight(1f)) {
                                     Text(expense.note, style = MaterialTheme.typography.bodyLarge)
                                     Text(categoryName, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 }
-                                // Karena ini pengeluaran, beri tanda minus (-)
-                                Text(
-                                    text = "- ${formatter.format(expense.amount)}",
-                                    style = MaterialTheme.typography.bodyLarge,
-                                    color = MaterialTheme.colorScheme.error
-                                )
+                                Column(horizontalAlignment = Alignment.End) {
+                                    Text(
+                                        text = "- ${formatter.format(expense.amount)}",
+                                        style = MaterialTheme.typography.bodyLarge,
+                                        color = MaterialTheme.colorScheme.error
+                                    )
+                                    IconButton(onClick = { showDeleteConfirm = true }) {
+                                        Icon(Icons.Default.Delete, contentDescription = "Hapus", tint = MaterialTheme.colorScheme.error)
+                                    }
+                                }
                             }
+                        }
+
+                        // Dialog Konfirmasi Hapus
+                        if (showDeleteConfirm) {
+                            AlertDialog(
+                                onDismissRequest = { showDeleteConfirm = false },
+                                title = { Text("Hapus Catatan?") },
+                                text = { Text("Apakah kamu yakin ingin menghapus catatan '${expense.note}'?") },
+                                confirmButton = {
+                                    Button(
+                                        onClick = {
+                                            onDeleteExpense(expense)
+                                            showDeleteConfirm = false
+                                        },
+                                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                                    ) {
+                                        Text("Hapus")
+                                    }
+                                },
+                                dismissButton = {
+                                    TextButton(onClick = { showDeleteConfirm = false }) { Text("Batal") }
+                                }
+                            )
                         }
                     }
                 }
@@ -98,7 +180,7 @@ fun CatatanScreen(
         }
     }
 
-    // --- DIALOG TAMBAH PENGELUARAN (Sama seperti sebelumnya) ---
+    // --- DIALOG TAMBAH PENGELUARAN ---
     if (showDialog) {
         var selectedCategory by remember { mutableStateOf<Category?>(null) }
         var amountText by remember { mutableStateOf("") }
@@ -174,7 +256,7 @@ fun CatatanScreen(
     }
 }
 
-// Fungsi bantuan untuk memformat "2026-10-23" menjadi "Kamis, 23 Oktober 2026" atau "Hari Ini"
+// Fungsi bantuan untuk memformat tanggal
 fun formatDateHeader(dateString: String): String {
     return try {
         val sdfInput = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())

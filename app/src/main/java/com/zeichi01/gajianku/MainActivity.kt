@@ -1,8 +1,3 @@
-/*
- * CATATAN PERUBAHAN:
- * 1. Pemanggilan OnboardingScreen disesuaikan dengan parameter baru (name, bankName).
- * 2. Parameter 'salary' dihapus dari pemanggilan viewModel.saveOnboardingData.
- */
 package com.zeichi01.gajianku
 
 import android.os.Bundle
@@ -136,7 +131,6 @@ class MainActivity : ComponentActivity() {
                                 user = currentUser!!,
                                 allocation = currentAllocation,
                                 db = db,
-                                remainingLivingCost = 0L,
                                 onResetAllocation = { viewModel.resetAllocation() }
                             )
                         }
