@@ -1,6 +1,6 @@
 # Roadmap GajianKu
 
-## Fase 1 — Fondasi (Minggu 1-2)
+## Fase 1 — Fondasi ✅ SELESAI
 
 ### Setup
 - [x] Install Android Studio
@@ -17,36 +17,53 @@
 - [x] Repository layer
 - [x] Expense tracking
 
-## Fase 2 — UI Dasar (Minggu 3-4)
+## Fase 2 — UI Dasar ✅ SELESAI
 
-- [ ] Onboarding (input gaji pertama)
-- [ ] Home (tampilkan alokasi bulan ini)
-- [ ] Preset management (list, tambah, edit)
-- [ ] Target tabungan (list, tambah, prioritas)
-- [ ] History (alokasi bulan sebelumnya)
+- [x] Onboarding (input nama & pilih bank)
+- [x] Home (tampilkan alokasi bulan ini + grafik donat)
+- [x] Preset management (pilih preset)
+- [x] Target tabungan (list, tambah, prioritas, drag-and-drop)
+- [x] Catatan pengeluaran (mutasi harian)
+- [x] Profile (info user, tabungan darurat)
+- [x] Hapus catatan & target
+- [x] Total dana terkumpul (Target)
+- [x] Sisa biaya hidup & total investasi (Catatan)
 
-## Fase 3 — Auto-Detect (Minggu 5)
+## Fase 3 — Auto-Detect ✅ SELESAI
 
-- [ ] NotificationListenerService setup
-- [ ] Izin notifikasi ke user
-- [ ] Whitelist package bank/e-wallet
-- [ ] Regex parser BCA
-- [ ] Regex parser GoPay
-- [ ] Trigger alokasi otomatis
-- [ ] Test dengan notifikasi real
+- [x] NotificationListenerService setup
+- [x] Izin notifikasi ke user
+- [x] Whitelist package bank/e-wallet
+- [x] Regex parser BCA
+- [x] Trigger alokasi otomatis
+- [x] Distribusi otomatis ke target
+- [x] Test dengan notifikasi ADB
+- [ ] Regex parser GoPay (belum diuji)
+- [ ] Regex parser bank lain (Mandiri, OVO, DANA)
 
-## Fase 4 — Polish & Portfolio (Minggu 6)
+## Fase 4 — Perbaikan Bug & Polish 🚧 SEDANG BERJALAN
+
+- [ ] Perbaiki bug alokasi dobel (sebagian sudah)
+- [ ] Perbaiki bug gaji tersimpan 8jt bukan 80jt
+- [ ] Saldo Catatan refresh otomatis (tanpa tutup-buka app)
+- [ ] Home refresh otomatis setelah notifikasi
+- [ ] Simpan presetId pilihan user (bukan default)
+- [ ] Test ulang drag-and-drop target
+- [ ] UI Profile menjadi menu (Pengaturan, Ubah Bank, Tanggal Gajian)
+- [ ] Halaman "Siap Dibeli" untuk target yang sudah penuh
+- [ ] Global Deficit UI
+
+## Fase 5 — Portfolio & Publikasi
 
 - [ ] Screenshot semua screen
 - [ ] Demo video (1-2 menit)
 - [ ] README final dengan screenshot
 - [ ] Publish ke Play Store (internal testing)
-- [ ] Tambah bank lain (Mandiri, OVO, DANA)
 
-## Fase 5 — Fitur Lanjutan (Opsional)
+## Fase 6 — Fitur Lanjutan (Opsional)
 
 - [ ] Notifikasi reminder alokasi
-- [ ] Statistik & chart
+- [ ] Statistik & chart tambahan
 - [ ] Backup/restore
 - [ ] Export CSV/PDF
 - [ ] Auto-transfer (butuh payment gateway)
