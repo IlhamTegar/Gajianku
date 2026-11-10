@@ -22,4 +22,6 @@ interface UserDao {
 
     @Query("SELECT * FROM users LIMIT 1")
     suspend fun getUserOnce(): User?
+    @Query("SELECT * FROM users LIMIT 1")
+    fun observeUser(): Flow<User?>
 }

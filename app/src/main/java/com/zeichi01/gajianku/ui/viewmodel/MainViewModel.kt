@@ -9,7 +9,6 @@ import com.zeichi01.gajianku.data.local.entity.User
 import com.zeichi01.gajianku.data.repository.AllocationRepository
 import com.zeichi01.gajianku.data.repository.PresetRepository
 import com.zeichi01.gajianku.domain.AllocationResult
-import com.zeichi01.gajianku.domain.SalaryAllocator
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -24,7 +23,6 @@ class MainViewModel(
     private val presetRepo = PresetRepository(db.presetDao(), db.categoryDao())
     private val allocationRepo = AllocationRepository(db.allocationDao())
 
-    // State untuk UI
     private val _currentUser = MutableStateFlow<User?>(null)
     val currentUser: StateFlow<User?> = _currentUser.asStateFlow()
 
@@ -38,27 +36,32 @@ class MainViewModel(
     val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
 
     init {
-        loadData()
+        observeData()
     }
 
-    private fun loadData() {
+    // BARU: Reaktif memantau perubahan database
+    private fun observeData() {
+        // Pantau user (gaji, activePresetId)
         viewModelScope.launch {
-            val user = userDao.getUserOnce()
-            _currentUser.value = user
-
-            val presets = presetRepo.getAllPresets().first()
-            _availablePresets.value = presets
-
-            if (user != null) {
-                // Cek apakah alokasi bulan ini sudah ada di database
-                val currentMonth = allocationRepo.getCurrentMonth()
-                val existingAllocation = allocationRepo.getAllocationByMonth(currentMonth)
-
-                if (existingAllocation != null) {
-                    // Jika sudah ada, muat datanya ke UI
-                    val items = allocationRepo.getItemsByAllocationOnce(existingAllocation.id)
+            userDao.observeUser().collect { user ->
+                _currentUser.value = user
+            }
+        }
+        // Pantau preset
+        viewModelScope.launch {
+            presetRepo.getAllPresets().collect { presets ->
+                _availablePresets.value = presets
+            }
+        }
+        // Pantau alokasi bulan ini
+        viewModelScope.launch {
+            val currentMonth = allocationRepo.getCurrentMonth()
+            db.allocationDao().observeAllocationByMonth(currentMonth).collect { alloc ->
+                if (alloc == null) {
+                    _currentAllocation.value = null
+                } else {
+                    val items = allocationRepo.getItemsByAllocationOnce(alloc.id)
                     val categories = presetRepo.getAllCategories().first()
-
                     val allocatedItems = items.map { item ->
                         val cat = categories.find { it.id == item.categoryId }
                         com.zeichi01.gajianku.domain.AllocatedItem(
@@ -69,79 +72,33 @@ class MainViewModel(
                             isSavingsPocket = cat?.isSavingsPocket ?: false
                         )
                     }
-
                     val savingsWajib = allocatedItems.find { it.categoryName == "Tabungan Wajib" }?.amount ?: 0L
                     val savingsDarurat = allocatedItems.find { it.categoryName == "Tabungan Darurat" }?.amount ?: 0L
-
                     _currentAllocation.value = AllocationResult(
-                        salaryAmount = existingAllocation.salaryAmount,
+                        salaryAmount = alloc.salaryAmount,
                         items = allocatedItems,
                         totalSavingsPocket = savingsWajib + savingsDarurat,
                         savingsWajibAmount = savingsWajib,
                         savingsDaruratAmount = savingsDarurat,
-                        deficitPaid = existingAllocation.deficitPaid
+                        deficitPaid = alloc.deficitPaid
                     )
-                } else {
-                    _currentAllocation.value = null
                 }
+                _isLoading.value = false
             }
-
-            _isLoading.value = false
         }
     }
 
     fun saveOnboardingData(name: String, bankName: String) {
         viewModelScope.launch {
             userDao.insert(User(name = name, monthlySalary = 0, bankName = bankName))
-            loadData()
         }
     }
 
     fun applyPreset(presetId: Long) {
         viewModelScope.launch {
             val user = _currentUser.value ?: return@launch
-
-            // Cek dulu apakah alokasi bulan ini sudah ada
-            val currentMonth = allocationRepo.getCurrentMonth()
-            val existingAllocation = allocationRepo.getAllocationByMonth(currentMonth)
-
-            if (existingAllocation != null) {
-                // Jika sudah ada, JANGAN timpa. Cukup muat ulang data.
-                Log.d("MainVM", "Alokasi bulan ini sudah ada, tidak menimpa")
-                loadData()
-                return@launch
-            }
-
-            // Jika belum ada, baru hitung dan simpan
-            val salaryToAllocate = if (user.monthlySalary > 0) user.monthlySalary else 10000000L
-
-            val presetItems = presetRepo.getPresetItemsOnce(presetId)
-            val categories = presetRepo.getAllCategories().first()
-
-            val allocationResult = SalaryAllocator.allocate(
-                salary = salaryToAllocate,
-                presetItems = presetItems,
-                categories = categories,
-                currentDeficit = 0
-            )
-
-            val allocationItems = allocationResult.items.map { item ->
-                com.zeichi01.gajianku.data.local.entity.AllocationItem(
-                    allocationId = 0,
-                    categoryId = item.categoryId,
-                    amount = item.amount
-                )
-            }
-
-            allocationRepo.saveAllocation(
-                month = currentMonth,
-                salaryAmount = salaryToAllocate,
-                presetId = presetId,
-                deficitPaid = allocationResult.deficitPaid,
-                items = allocationItems
-            )
-
-            loadData()
+            userDao.update(user.copy(activePresetId = presetId))
+            Log.d("MainVM", "Preset $presetId disimpan")
         }
     }
 
@@ -153,7 +110,6 @@ class MainViewModel(
         val items = presetRepo.getPresetItemsOnce(presetId)
         val categories = presetRepo.getAllCategories().first()
         val catMap = categories.associateBy { it.id }
-
         return items.joinToString("\n") { item ->
             val catName = catMap[item.categoryId]?.name ?: "Unknown"
             "• $catName: ${item.percentage.toInt()}%"

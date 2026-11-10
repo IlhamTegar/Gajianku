@@ -63,11 +63,13 @@ class MainActivity : ComponentActivity() {
                     }
                 } else {
                     if (currentUser == null) {
+                        // User belum onboarding
                         OnboardingScreen(
                             onSave = { name, bankName -> viewModel.saveOnboardingData(name, bankName) }
                         )
                     } else {
-                        if (currentAllocation == null && availablePresets.isNotEmpty()) {
+                        // DIUBAH: Dialog preset muncul jika activePresetId == null
+                        if (currentUser!!.activePresetId == null && availablePresets.isNotEmpty()) {
                             var selectedPreviewId by remember { mutableStateOf<Long?>(null) }
                             var previewText by remember { mutableStateOf("") }
 
@@ -127,6 +129,7 @@ class MainActivity : ComponentActivity() {
                                 }
                             )
                         } else {
+                            // User sudah pilih preset, tampilkan navigasi utama
                             AppNavigation(
                                 user = currentUser!!,
                                 allocation = currentAllocation,

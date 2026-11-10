@@ -33,6 +33,9 @@ interface AllocationDao {
     @Query("SELECT * FROM allocation_items WHERE allocationId = :allocationId")
     suspend fun getItemsByAllocationOnce(allocationId: Long): List<AllocationItem>
 
+    @Query("SELECT * FROM salary_allocations WHERE month = :month LIMIT 1")
+    fun observeAllocationByMonth(month: String): Flow<SalaryAllocation?>
+
     @Transaction
     suspend fun insertFullAllocation(
         allocation: SalaryAllocation,

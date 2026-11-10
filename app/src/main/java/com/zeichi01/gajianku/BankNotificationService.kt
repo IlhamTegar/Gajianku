@@ -23,6 +23,21 @@ class BankNotificationService : NotificationListenerService() {
     private val db by lazy { AppDatabase.getInstance(this) }
     private val scope = CoroutineScope(Dispatchers.IO)
 
+    // BARU: Dedupe in-memory untuk mencegah notifikasi yang sama diproses dua kali
+    private val seen = LinkedHashMap<String, Long>()
+
+    private fun isDuplicate(packageName: String, text: String): Boolean {
+        val key = "$packageName|${text.hashCode()}"
+        val now = System.currentTimeMillis()
+        synchronized(seen) {
+            // Bersihkan cache yang lebih dari 60 detik
+            seen.entries.removeIf { now - it.value > 60_000 }
+            if (seen.containsKey(key)) return true
+            seen[key] = now
+        }
+        return false
+    }
+
     override fun onNotificationPosted(sbn: StatusBarNotification) {
         super.onNotificationPosted(sbn)
 
@@ -32,39 +47,37 @@ class BankNotificationService : NotificationListenerService() {
         val text = extras.getCharSequence(Notification.EXTRA_TEXT)?.toString() ?: ""
         val fullText = "$title $text"
 
-        // LOG BARU: Cek package apa yang masuk
         Log.d("NotifListener", "PANCINGAN: Service menerima notifikasi dari: $packageName")
-        // LOG BARU: Cek isi teks notifikasinya
         Log.d("NotifListener", "ISI TEKS: $fullText")
 
-        // Daftar package bank
+        // DIUBAH: whitelist bank, tanpa instagram, tambah DANA
         val validPackages = mapOf(
             "com.bca" to "BCA",
-            "com.instagram.android" to "BCA",
-            "com.android.shell" to "BCA", // <-- Pastikan ini ada
             "com.gojek.gopay" to "GoPay",
             "id.co.bri.brimo" to "BRI",
-            "com.bankmandiri.mandiri" to "Mandiri"
+            "com.bankmandiri.mandiri" to "Mandiri",
+            "id.dana" to "DANA",
+            "com.android.shell" to "BCA" // Simulasi ADB untuk testing
         )
+
+        // BARU: Cek dedupe sebelum diproses
+        if (isDuplicate(packageName, fullText)) {
+            Log.d("NotifListener", "DUPLIKAT dilewati: $fullText")
+            return
+        }
 
         scope.launch {
             val user = db.userDao().getUserOnce() ?: return@launch
             val senderBank = validPackages[packageName]
 
-            // LOG BARU: Cek apakah bank dikenali dan cocok dengan pilihan user
             Log.d("NotifListener", "BANK TERDETEKSI: $senderBank | BANK USER: ${user.bankName}")
 
-            // Cek apakah notifikasi dari Bank yang dipilih user
             if (senderBank != null && senderBank == user.bankName) {
-
-                // LOG BARU: Cek apakah dianggap transaksi masuk
                 val isIncoming = BankNotificationParser.isIncomingTransaction(fullText)
                 Log.d("NotifListener", "APAKAH TRANSAKSI MASUK? $isIncoming")
 
                 if (isIncoming) {
                     val amount = BankNotificationParser.parseAmount(fullText)
-
-                    // LOG BARU: Cek berapa nominal yang berhasil di-parse
                     Log.d("NotifListener", "NOMINAL TERBACA: $amount")
 
                     if (amount != null && amount > 0) {
@@ -74,37 +87,24 @@ class BankNotificationService : NotificationListenerService() {
                             Log.d("NotifListener", "GAJI TERDETEKSI! Memproses alokasi...")
                             processSalary(user, amount)
                         } else {
-                            // --- KASUS 2: PEMASUKAN LAIN (Tanggal > 10) ---
                             Log.d("NotifListener", "Pemasukan lain terdeteksi. Membagi ke Tabungan Darurat & Wajib...")
-
-                            // 1. Bagi 50:50 (bisa diubah nanti)
                             val emergencyShare = amount / 2
                             val savingsShare = amount - emergencyShare
 
-                            // 2. Masukkan ke Tabungan Darurat
                             val emergencyRepo = EmergencyFundRepository(db.emergencyFundDao())
                             emergencyRepo.addFunds(emergencyShare, "Pemasukan otomatis dari $senderBank")
 
-                            // 3. Masukkan ke Tabungan Wajib (Target)
                             if (savingsShare > 0) {
-                                // Cari target aktif yang prioritasnya TINGGI untuk dimasukkan uangnya
                                 val activeTargets = db.savingsTargetDao().getActiveTargets().first()
-
                                 if (activeTargets.isNotEmpty()) {
-                                    // Ambil target pertama (yang paling prioritas)
                                     val target = activeTargets.first()
                                     val newAmount = target.currentAmount + savingsShare
-
-                                    // Simpan ke target
                                     db.savingsTargetDao().updateAmount(target.id, newAmount)
-
-                                    // Cek apakah target jadi terpenuhi
                                     if (newAmount >= target.targetAmount && target.status == "AKTIF") {
                                         db.savingsTargetDao().updateStatus(target.id, "SIAP_DIBELI")
                                     }
                                     Log.d("NotifListener", "Rp $savingsShare masuk ke target: ${target.name}")
                                 } else {
-                                    // Kalau tidak ada target aktif, semuanya masuk ke Darurat
                                     emergencyRepo.addFunds(savingsShare, "Pemasukan otomatis (tidak ada target aktif)")
                                     Log.d("NotifListener", "Tidak ada target aktif, Rp $savingsShare dialihkan ke Darurat.")
                                 }
@@ -116,21 +116,24 @@ class BankNotificationService : NotificationListenerService() {
         }
     }
 
+    // DIUBAH: processSalary sekarang pakai activePresetId, cek Result, dan hanya update monthlySalary jika berhasil
     private suspend fun processSalary(user: User, amount: Long) {
-        // 1. Update gaji user
-        db.userDao().update(user.copy(monthlySalary = amount))
-
-        // 2. Ambil preset default & kategori
         val presetRepo = PresetRepository(db.presetDao(), db.categoryDao())
         val allocationRepo = AllocationRepository(db.allocationDao())
 
+        // Ambil preset: prioritas activePresetId, fallback ke default
         val presets = presetRepo.getAllPresets().first()
-        val defaultPreset = presets.firstOrNull { it.isDefault } ?: presets.firstOrNull() ?: return
+        val preset = user.activePresetId?.let { id -> presets.firstOrNull { it.id == id } }
+            ?: presets.firstOrNull { it.isDefault }
+            ?: presets.firstOrNull()
+            ?: run {
+                Log.w("NotifListener", "Tidak ada preset tersedia, alokasi dibatalkan")
+                return
+            }
 
-        val presetItems = presetRepo.getPresetItemsOnce(defaultPreset.id)
+        val presetItems = presetRepo.getPresetItemsOnce(preset.id)
         val categories = presetRepo.getAllCategories().first()
 
-        // 3. Hitung Alokasi
         val allocationResult = SalaryAllocator.allocate(
             salary = amount,
             presetItems = presetItems,
@@ -138,7 +141,6 @@ class BankNotificationService : NotificationListenerService() {
             currentDeficit = 0
         )
 
-        // 4. Simpan Alokasi ke Database
         val allocationItems = allocationResult.items.map { item ->
             AllocationItem(
                 allocationId = 0,
@@ -147,35 +149,49 @@ class BankNotificationService : NotificationListenerService() {
             )
         }
 
-        allocationRepo.saveAllocation(
+        val saved = allocationRepo.saveAllocation(
             month = allocationRepo.getCurrentMonth(),
             salaryAmount = amount,
-            presetId = defaultPreset.id,
+            presetId = preset.id,
             deficitPaid = allocationResult.deficitPaid,
             items = allocationItems
         )
 
-        // --- 5. LOGIKA BARU: DISTRIBUSI TABUNGAN WAJIB KE TARGET ---
-        // Jika ada uang di Tabungan Wajib (setelah dipotong minus)
+        // BARU: Jika gagal (bulan ini sudah ada alokasi), berhenti. Jangan lanjut ke target.
+        if (saved.isFailure) {
+            Log.w("NotifListener", "Alokasi dilewati: ${saved.exceptionOrNull()?.message}")
+            return
+        }
+
+        // BARU: Update monthlySalary HANYA setelah alokasi berhasil
+        db.userDao().update(user.copy(monthlySalary = amount))
+
+        // BARU: Simpan Tabungan Darurat ke EmergencyFund
+        if (allocationResult.savingsDaruratAmount > 0) {
+            val emergencyRepo = EmergencyFundRepository(db.emergencyFundDao())
+            emergencyRepo.addFunds(
+                amount = allocationResult.savingsDaruratAmount,
+                note = "Alokasi gaji bulan ${allocationRepo.getCurrentMonth()}"
+            )
+            Log.d("NotifListener", "Tabungan Darurat: Rp ${allocationResult.savingsDaruratAmount} disimpan")
+        }
+
+        // Distribusi Tabungan Wajib ke Target
         if (allocationResult.savingsWajibAmount > 0) {
             val activeTargets = db.savingsTargetDao().getActiveTargets().first()
 
             if (activeTargets.isNotEmpty()) {
-                // Gunakan SavingsDistributor untuk membagi uang ke target
                 val distribution = SavingsDistributor.distribute(
                     availableAmount = allocationResult.savingsWajibAmount,
                     targets = activeTargets
                 )
 
-                // Simpan hasil distribusi ke database
                 distribution.allocations.forEach { (targetId, allocatedAmount) ->
                     if (allocatedAmount > 0) {
                         val target = activeTargets.find { it.id == targetId }
                         if (target != null) {
                             val newAmount = target.currentAmount + allocatedAmount
                             db.savingsTargetDao().updateAmount(target.id, newAmount)
-
-                            // Cek apakah target jadi terpenuhi
                             if (newAmount >= target.targetAmount && target.status == "AKTIF") {
                                 db.savingsTargetDao().updateStatus(target.id, "SIAP_DIBELI")
                             }
