@@ -1,247 +1,103 @@
 package com.zeichi01.gajianku.ui.screen
 
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.LifecycleEventObserver
-import androidx.lifecycle.compose.LocalLifecycleOwner
-import androidx.compose.runtime.DisposableEffect
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowForward
+import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
-import com.zeichi01.gajianku.NotificationUtils
-import com.zeichi01.gajianku.data.local.entity.EmergencyFund
-import com.zeichi01.gajianku.data.local.entity.EmergencyFundHistory
 import com.zeichi01.gajianku.data.local.entity.User
 import java.text.NumberFormat
-import java.text.SimpleDateFormat
-import java.util.Date
 import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ProfileScreen(
     user: User,
-    emergencyFund: EmergencyFund?,
-    history: List<EmergencyFundHistory>,
-    onUseFund: (Long, String) -> Unit
+    onNavigateToEmergencyFund: () -> Unit,
+    onNavigateToSettings: () -> Unit
 ) {
-    var showDialog by remember { mutableStateOf(false) }
     val formatter = NumberFormat.getCurrencyInstance(Locale("in", "ID"))
-
-    val context = LocalContext.current
-    // Gunakan mutableStateOf agar nilainya bisa berubah secara reaktif
-    var isServiceEnabled by remember { mutableStateOf(NotificationUtils.isNotificationServiceEnabled(context)) }
-    val lifecycleOwner = LocalLifecycleOwner.current
-
-    // Pantau siklus hidup aplikasi
-    DisposableEffect(lifecycleOwner) {
-        val observer = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_RESUME) {
-                // Cek ulang izin setiap kali layar kembali aktif
-                isServiceEnabled = NotificationUtils.isNotificationServiceEnabled(context)
-            }
-        }
-        lifecycleOwner.lifecycle.addObserver(observer)
-        onDispose {
-            lifecycleOwner.lifecycle.removeObserver(observer)
-        }
-    }
 
     Scaffold(
         topBar = {
-            TopAppBar(title = { Text("Profil & Darurat") })
+            TopAppBar(title = { Text("Profil") })
         }
     ) { padding ->
         LazyColumn(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+            modifier = Modifier.fillMaxSize().padding(padding).padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            // --- CARD STATUS IZIN NOTIFIKASI ---
-            item {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(
-                        containerColor = if (isServiceEnabled) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.errorContainer
-                    )
-                ) {
-                    Column(modifier = Modifier.padding(16.dp)) {
-                        Text(
-                            text = if (isServiceEnabled) "Deteksi Gaji Aktif ✅" else "Deteksi Gaji Belum Aktif ❌",
-                            style = MaterialTheme.typography.titleMedium,
-                            color = if (isServiceEnabled) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onErrorContainer
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
-                        if (!isServiceEnabled) {
-                            Text(
-                                text = "Izinkan GajianKu membaca notifikasi bank untuk mendeteksi gaji secara otomatis.",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onErrorContainer
-                            )
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Button(
-                                onClick = { NotificationUtils.openNotificationSettings(context) },
-                                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
-                            ) {
-                                Text("Buka Pengaturan Izin")
-                            }
-                        }
-                    }
-                }
-            }
-
             // --- INFO USER ---
             item {
                 Card(modifier = Modifier.fillMaxWidth()) {
-                    Column(modifier = Modifier.padding(16.dp)) {
-                        Text("Nama: ${user.name}", style = MaterialTheme.typography.titleMedium)
-                        Text("Bank: ${user.bankName}", style = MaterialTheme.typography.bodyMedium)
-                        Text("Gaji Terdeteksi: ${formatter.format(user.monthlySalary)}", style = MaterialTheme.typography.bodyMedium)
-                    }
-                }
-            }
-
-            // --- KARTU TABUNGAN DARURAT ---
-            item {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer)
-                ) {
-                    Column(modifier = Modifier.padding(16.dp)) {
-                        Text("Tabungan Darurat", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onErrorContainer)
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text(
-                            text = formatter.format(emergencyFund?.currentBalance ?: 0L),
-                            style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Bold),
-                            color = MaterialTheme.colorScheme.onErrorContainer
-                        )
-                        Spacer(modifier = Modifier.height(16.dp))
-                        Button(
-                            onClick = { showDialog = true },
-                            modifier = Modifier.fillMaxWidth(),
-                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        // Placeholder Avatar
+                        Surface(
+                            modifier = Modifier.size(60.dp),
+                            shape = MaterialTheme.shapes.medium,
+                            color = MaterialTheme.colorScheme.primaryContainer
                         ) {
-                            Text("Pakai Dana Darurat")
-                        }
-                    }
-                }
-            }
-
-            // --- HISTORY PEMAKAIAN DARURAT ---
-            item {
-                Text("Riwayat Pemakaian Darurat", style = MaterialTheme.typography.titleMedium)
-            }
-
-            if (history.isEmpty()) {
-                item {
-                    Text("Belum ada riwayat pemakaian.", style = MaterialTheme.typography.bodyMedium)
-                }
-            } else {
-                items(history) { item ->
-                    val sdf = SimpleDateFormat("dd MMM yyyy, HH:mm", Locale("in", "ID"))
-                    val dateStr = sdf.format(Date(item.createdAt))
-                    val isUsage = item.type == "PAKAI"
-
-                    Card(modifier = Modifier.fillMaxWidth()) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(16.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Column {
-                                Text(item.note, style = MaterialTheme.typography.bodyLarge)
-                                Text(dateStr, style = MaterialTheme.typography.bodySmall)
+                            Box(contentAlignment = Alignment.Center) {
+                                Text(
+                                    text = user.name.take(1).uppercase(),
+                                    style = MaterialTheme.typography.headlineMedium,
+                                    color = MaterialTheme.colorScheme.onPrimaryContainer
+                                )
                             }
-                            Text(
-                                text = if (isUsage) "- ${formatter.format(item.amount)}" else "+ ${formatter.format(item.amount)}",
-                                color = if (isUsage) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
-                                style = MaterialTheme.typography.bodyLarge
-                            )
+                        }
+                        Spacer(modifier = Modifier.width(16.dp))
+                        Column {
+                            Text(user.name, style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold))
+                            Text("Bank: ${user.bankName}", style = MaterialTheme.typography.bodyMedium)
+                            Text("Gaji: ${formatter.format(user.monthlySalary)}", style = MaterialTheme.typography.bodySmall)
                         }
                     }
                 }
+            }
+
+            // --- MENU ITEMS ---
+            item {
+                MenuItemCard(
+                    title = "Tabungan Darurat",
+                    subtitle = "Kelola saldo & riwayat darurat",
+                    onClick = onNavigateToEmergencyFund
+                )
+            }
+
+            item {
+                MenuItemCard(
+                    title = "Pengaturan",
+                    subtitle = "Ubah bank, tanggal gajian, dll",
+                    onClick = onNavigateToSettings
+                )
             }
         }
     }
+}
 
-    // --- DIALOG PAKAI DARURAT ---
-    if (showDialog) {
-        var amountText by remember { mutableStateOf("") }
-        var note by remember { mutableStateOf("") }
-
-        AlertDialog(
-            onDismissRequest = { showDialog = false },
-            title = { Text("Pakai Dana Darurat") },
-            text = {
-                Column {
-                    Text("Gunakan hanya untuk keadaan mendesak!", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
-                    Spacer(modifier = Modifier.height(8.dp))
-                    OutlinedTextField(
-                        value = amountText,
-                        onValueChange = { if (it.all { char -> char.isDigit() }) amountText = it },
-                        label = { Text("Nominal (Rp)") },
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    OutlinedTextField(
-                        value = note,
-                        onValueChange = { note = it },
-                        label = { Text("Untuk apa? (Misal: Ban bocor)") },
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                }
-            },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        val amount = amountText.toLongOrNull()
-                        if (amount != null && amount > 0 && note.isNotBlank()) {
-                            onUseFund(amount, note)
-                            showDialog = false
-                        }
-                    },
-                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
-                ) {
-                    Text("Gunakan")
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showDialog = false }) { Text("Batal") }
+@Composable
+fun MenuItemCard(title: String, subtitle: String, onClick: () -> Unit) {
+    Card(
+        modifier = Modifier.fillMaxWidth().clickable { onClick() }
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(title, style = MaterialTheme.typography.titleMedium)
+                Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
-        )
+            Icon(Icons.Default.ArrowForward, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
     }
 }

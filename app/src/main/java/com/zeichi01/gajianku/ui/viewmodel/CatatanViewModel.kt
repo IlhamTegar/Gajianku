@@ -1,5 +1,6 @@
 package com.zeichi01.gajianku.ui.viewmodel
 
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.zeichi01.gajianku.data.local.AppDatabase
@@ -59,6 +60,8 @@ class CatatanViewModel(
         }
     }
 
+    // Di dalam class CatatanViewModel
+
     fun calculateRemainingLivingCost() {
         viewModelScope.launch {
             val currentMonth = allocationRepo.getCurrentMonth()
@@ -67,20 +70,18 @@ class CatatanViewModel(
             val items = allocationRepo.getItemsByAllocationOnce(allocation.id)
             val categories = presetRepo.getAllCategories().first()
 
-            // --- 1. Hitung Sisa Biaya Hidup ---
-            val biayaHidupCat = categories.find { it.name == "Biaya Hidup" }
-            if (biayaHidupCat != null) {
-                val allocatedAmount = items.find { it.categoryId == biayaHidupCat.id }?.amount ?: 0L
-                val expenses = expenseRepo.getTotalByCategory(currentMonth, biayaHidupCat.id).first()
-                _remainingLivingCost.value = allocatedAmount - expenses
-            }
+            val biayaHidupCat = categories.find { it.name == "Biaya Hidup" } ?: return@launch
+            val allocatedAmount = items.find { it.categoryId == biayaHidupCat.id }?.amount ?: 0L
 
-            // --- 2. Hitung Total Investasi ---
-            val investasiCat = categories.find { it.name == "Investasi" }
-            if (investasiCat != null) {
-                val totalInvest = expenseRepo.getTotalByCategory(currentMonth, investasiCat.id).first()
-                _totalInvestment.value = totalInvest
-            }
+            // TAMBAHKAN LOG INI UNTUK DEBUG
+            Log.d("CatatanVM", "Alokasi Biaya Hidup dari DB: $allocatedAmount")
+
+            val expenses = expenseRepo.getTotalByCategory(currentMonth, biayaHidupCat.id).first()
+
+            // TAMBAHKAN LOG INI UNTUK DEBUG
+            Log.d("CatatanVM", "Total Pengeluaran: $expenses")
+
+            _remainingLivingCost.value = allocatedAmount - expenses
         }
     }
 

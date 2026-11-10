@@ -1,19 +1,12 @@
-/*
- * CATATAN PERUBAHAN:
- * 1. Menambahkan ExpenseRepository.
- * 2. Menambahkan state _remainingLivingCost untuk menyimpan sisa biaya hidup.
- * 3. Menambahkan fungsi calculateRemainingLivingCost().
- * 4. Memanggil calculateRemainingLivingCost() di loadData() dan applyPreset().
- */
 package com.zeichi01.gajianku.ui.viewmodel
 
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.zeichi01.gajianku.data.local.AppDatabase
 import com.zeichi01.gajianku.data.local.entity.Preset
 import com.zeichi01.gajianku.data.local.entity.User
 import com.zeichi01.gajianku.data.repository.AllocationRepository
-import com.zeichi01.gajianku.data.repository.ExpenseRepository
 import com.zeichi01.gajianku.data.repository.PresetRepository
 import com.zeichi01.gajianku.domain.AllocationResult
 import com.zeichi01.gajianku.domain.SalaryAllocator
@@ -30,7 +23,6 @@ class MainViewModel(
     private val userDao = db.userDao()
     private val presetRepo = PresetRepository(db.presetDao(), db.categoryDao())
     private val allocationRepo = AllocationRepository(db.allocationDao())
-    private val expenseRepo = ExpenseRepository(db.expenseDao())
 
     // State untuk UI
     private val _currentUser = MutableStateFlow<User?>(null)
@@ -41,9 +33,6 @@ class MainViewModel(
 
     private val _availablePresets = MutableStateFlow<List<Preset>>(emptyList())
     val availablePresets: StateFlow<List<Preset>> = _availablePresets.asStateFlow()
-
-    private val _remainingLivingCost = MutableStateFlow<Long>(0L)
-    val remainingLivingCost: StateFlow<Long> = _remainingLivingCost.asStateFlow()
 
     private val _isLoading = MutableStateFlow(true)
     val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
@@ -61,7 +50,7 @@ class MainViewModel(
             _availablePresets.value = presets
 
             if (user != null) {
-                // --- PERBAIKAN: Cek apakah alokasi bulan ini sudah ada di database ---
+                // Cek apakah alokasi bulan ini sudah ada di database
                 val currentMonth = allocationRepo.getCurrentMonth()
                 val existingAllocation = allocationRepo.getAllocationByMonth(currentMonth)
 
@@ -93,7 +82,6 @@ class MainViewModel(
                         deficitPaid = existingAllocation.deficitPaid
                     )
                 } else {
-                    // Jika belum ada (misal bulan baru atau user baru), biarkan null agar pop-up muncul
                     _currentAllocation.value = null
                 }
             }
@@ -113,6 +101,18 @@ class MainViewModel(
         viewModelScope.launch {
             val user = _currentUser.value ?: return@launch
 
+            // Cek dulu apakah alokasi bulan ini sudah ada
+            val currentMonth = allocationRepo.getCurrentMonth()
+            val existingAllocation = allocationRepo.getAllocationByMonth(currentMonth)
+
+            if (existingAllocation != null) {
+                // Jika sudah ada, JANGAN timpa. Cukup muat ulang data.
+                Log.d("MainVM", "Alokasi bulan ini sudah ada, tidak menimpa")
+                loadData()
+                return@launch
+            }
+
+            // Jika belum ada, baru hitung dan simpan
             val salaryToAllocate = if (user.monthlySalary > 0) user.monthlySalary else 10000000L
 
             val presetItems = presetRepo.getPresetItemsOnce(presetId)
@@ -133,24 +133,20 @@ class MainViewModel(
                 )
             }
 
-            if (user.monthlySalary > 0) {
-                allocationRepo.saveAllocation(
-                    month = allocationRepo.getCurrentMonth(),
-                    salaryAmount = user.monthlySalary,
-                    presetId = presetId,
-                    deficitPaid = allocationResult.deficitPaid,
-                    items = allocationItems
-                )
-            }
+            allocationRepo.saveAllocation(
+                month = currentMonth,
+                salaryAmount = salaryToAllocate,
+                presetId = presetId,
+                deficitPaid = allocationResult.deficitPaid,
+                items = allocationItems
+            )
 
-            _currentAllocation.value = allocationResult
-            calculateRemainingLivingCost()
+            loadData()
         }
     }
 
     fun resetAllocation() {
         _currentAllocation.value = null
-        _remainingLivingCost.value = 0L
     }
 
     suspend fun getPresetPreview(presetId: Long): String {
@@ -161,24 +157,6 @@ class MainViewModel(
         return items.joinToString("\n") { item ->
             val catName = catMap[item.categoryId]?.name ?: "Unknown"
             "• $catName: ${item.percentage.toInt()}%"
-        }
-    }
-
-    private fun calculateRemainingLivingCost() {
-        viewModelScope.launch {
-            val allocation = _currentAllocation.value ?: return@launch
-            val categories = presetRepo.getAllCategories().first()
-
-            val biayaHidupCat = categories.find { it.name == "Biaya Hidup" } ?: return@launch
-
-            val allocatedAmount = allocation.items.find { it.categoryId == biayaHidupCat.id }?.amount ?: 0L
-
-            val expenses = expenseRepo.getTotalByCategory(
-                month = allocationRepo.getCurrentMonth(),
-                categoryId = biayaHidupCat.id
-            ).first()
-
-            _remainingLivingCost.value = allocatedAmount - expenses
         }
     }
 }

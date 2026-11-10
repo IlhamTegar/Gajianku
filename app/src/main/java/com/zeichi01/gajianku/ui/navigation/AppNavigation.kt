@@ -6,6 +6,8 @@ import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.List
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -25,7 +27,9 @@ import com.zeichi01.gajianku.data.local.AppDatabase
 import com.zeichi01.gajianku.data.local.entity.User
 import com.zeichi01.gajianku.domain.AllocationResult
 import com.zeichi01.gajianku.ui.screen.CatatanScreen
+import com.zeichi01.gajianku.ui.screen.EmergencyFundScreen
 import com.zeichi01.gajianku.ui.screen.HomeScreen
+import com.zeichi01.gajianku.ui.screen.PlaceholderScreen
 import com.zeichi01.gajianku.ui.screen.ProfileScreen
 import com.zeichi01.gajianku.ui.screen.TargetScreen
 import com.zeichi01.gajianku.ui.viewmodel.CatatanViewModel
@@ -37,6 +41,8 @@ sealed class Screen(val route: String, val title: String, val icon: ImageVector)
     object Catatan : Screen("catatan", "Catatan", Icons.Default.List)
     object Target : Screen("target", "Target", Icons.Default.Star)
     object Profile : Screen("profile", "Profile", Icons.Default.Person)
+    object Emergency : Screen("emergency", "Darurat", Icons.Default.Warning)
+    object Settings : Screen("settings", "Pengaturan", Icons.Default.Settings)
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -157,12 +163,21 @@ fun AppNavigation(
             composable(Screen.Profile.route) {
                 ProfileScreen(
                     user = user,
+                    onNavigateToEmergencyFund = { navController.navigate(Screen.Emergency.route) },
+                    onNavigateToSettings = { navController.navigate(Screen.Settings.route) }
+                )
+            }
+            composable(Screen.Emergency.route) {
+                EmergencyFundScreen(
                     emergencyFund = emergencyFund,
                     history = emergencyHistory,
-                    onUseFund = { amount, note ->
-                        profileViewModel.useEmergencyFund(amount, note)
-                    }
+                    onUseFund = { amount, note -> profileViewModel.useEmergencyFund(amount, note) },
+                    onBackClick = { navController.popBackStack() }
                 )
+            }
+            composable(Screen.Settings.route) {
+                // Placeholder sementara
+                PlaceholderScreen(title = "Pengaturan (Segera Hadir)")
             }
         }
     }
