@@ -20,7 +20,8 @@ import java.util.Locale
 fun ProfileScreen(
     user: User,
     onNavigateToEmergencyFund: () -> Unit,
-    onNavigateToSettings: () -> Unit
+    onNavigateToSettings: () -> Unit,
+    onNavigateToHistory: () -> Unit
 ) {
     val formatter = NumberFormat.getCurrencyInstance(Locale("in", "ID"))
 
@@ -78,6 +79,14 @@ fun ProfileScreen(
                     title = "Pengaturan",
                     subtitle = "Ubah bank, tanggal gajian, dll",
                     onClick = onNavigateToSettings
+                )
+            }
+
+            item {
+                MenuItemCard(
+                    title = "Riwayat Target",
+                    subtitle = "Target yang sudah dibeli",
+                    onClick = onNavigateToHistory
                 )
             }
         }

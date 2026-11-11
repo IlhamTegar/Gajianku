@@ -31,16 +31,16 @@ fun TargetScreen(
     totalCollected: Long,
     onAddTarget: (String, Long, String) -> Unit,
     onDeleteTarget: (SavingsTarget) -> Unit,
-    onReorder: (List<SavingsTarget>) -> Unit
+    onReorder: (List<SavingsTarget>) -> Unit,
+    onMarkAsBought: (SavingsTarget, Long) -> Unit
 ) {
     var showDialog by remember { mutableStateOf(false) }
+    var buyingTarget by remember { mutableStateOf<SavingsTarget?>(null) }
     val formatter = NumberFormat.getCurrencyInstance(Locale("in", "ID"))
 
-    // State lokal untuk drag-and-drop
     val localTargets = remember(targets) { targets.toMutableStateList() }
     val lazyListState = rememberLazyListState()
 
-    // State untuk drag
     var draggingItemIndex by remember { mutableStateOf<Int?>(null) }
     var draggingItemOffset by remember { mutableStateOf(0f) }
 
@@ -56,13 +56,10 @@ fun TargetScreen(
     ) { padding ->
         LazyColumn(
             state = lazyListState,
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding),
+            modifier = Modifier.fillMaxSize().padding(padding),
             contentPadding = PaddingValues(16.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            // CARD TOTAL
             item {
                 Card(
                     modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
@@ -102,9 +99,7 @@ fun TargetScreen(
                             .fillMaxWidth()
                             .zIndex(if (isDragging) 1f else 0f)
                             .graphicsLayer {
-                                if (isDragging) {
-                                    translationY = draggingItemOffset
-                                }
+                                if (isDragging) translationY = draggingItemOffset
                             },
                         elevation = CardDefaults.cardElevation(defaultElevation = elevation)
                     ) {
@@ -136,7 +131,6 @@ fun TargetScreen(
                                     Icon(Icons.Default.Delete, contentDescription = "Hapus", tint = MaterialTheme.colorScheme.error)
                                 }
 
-                                // Drag handle manual
                                 Icon(
                                     imageVector = Icons.Default.DragHandle,
                                     contentDescription = "Geser",
@@ -151,15 +145,11 @@ fun TargetScreen(
                                                 onDrag = { change, dragAmount ->
                                                     change.consume()
                                                     draggingItemOffset += dragAmount.y
-
-                                                    // Hitung posisi baru
                                                     val currentIndex = draggingItemIndex ?: return@detectDragGesturesAfterLongPress
-                                                    val itemHeightPx = 150f // perkiraan tinggi item
+                                                    val itemHeightPx = 150f
                                                     val newIndex = (currentIndex + (draggingItemOffset / itemHeightPx).toInt())
                                                         .coerceIn(0, localTargets.size - 1)
-
                                                     if (newIndex != currentIndex) {
-                                                        // Cek prioritas sama
                                                         val fromPriority = localTargets.getOrNull(currentIndex)?.priority
                                                         val toPriority = localTargets.getOrNull(newIndex)?.priority
                                                         if (fromPriority == toPriority) {
@@ -172,7 +162,6 @@ fun TargetScreen(
                                                 onDragEnd = {
                                                     draggingItemIndex = null
                                                     draggingItemOffset = 0f
-                                                    // Simpan urutan baru
                                                     onReorder(localTargets.toList())
                                                 },
                                                 onDragCancel = {
@@ -193,6 +182,18 @@ fun TargetScreen(
                                 progress = { progress },
                                 modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
                             )
+
+                            // Tombol "Tandai Sudah Dibeli" untuk target SIAP_DIBELI
+                            if (target.status == "SIAP_DIBELI") {
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Button(
+                                    onClick = { buyingTarget = target },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                                ) {
+                                    Text("Tandai Sudah Dibeli")
+                                }
+                            }
                         }
                     }
                 }
@@ -200,7 +201,46 @@ fun TargetScreen(
         }
     }
 
-    // DIALOG TAMBAH TARGET
+    // Dialog "Tandai Sudah Dibeli"
+    if (buyingTarget != null) {
+        var actualPriceText by remember { mutableStateOf("") }
+        val target = buyingTarget!!
+
+        AlertDialog(
+            onDismissRequest = { buyingTarget = null },
+            title = { Text("Tandai Sudah Dibeli") },
+            text = {
+                Column {
+                    Text("Target: ${target.name}", style = MaterialTheme.typography.bodyMedium)
+                    Text("Terkumpul: ${formatter.format(target.currentAmount)}", style = MaterialTheme.typography.bodyMedium)
+                    Spacer(modifier = Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = actualPriceText,
+                        onValueChange = { if (it.all { char -> char.isDigit() }) actualPriceText = it },
+                        label = { Text("Harga Aktual (Rp)") },
+                        keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = KeyboardType.Number),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            },
+            confirmButton = {
+                Button(onClick = {
+                    val actualPrice = actualPriceText.toLongOrNull()
+                    if (actualPrice != null && actualPrice > 0) {
+                        onMarkAsBought(target, actualPrice)
+                        buyingTarget = null
+                    }
+                }) {
+                    Text("Konfirmasi")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { buyingTarget = null }) { Text("Batal") }
+            }
+        )
+    }
+
+    // Dialog tambah target
     if (showDialog) {
         var name by remember { mutableStateOf("") }
         var amountText by remember { mutableStateOf("") }

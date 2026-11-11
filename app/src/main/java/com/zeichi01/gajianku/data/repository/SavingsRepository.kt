@@ -126,7 +126,7 @@ class SavingsRepository(
 
             // Selisih: currentAmount - actualPrice
             // Positif = lebih murah (sisa masuk tabungan)
-            // Negatif = lebih mahal (minus)
+            // Negatif = lebih mahal (defisit)
             val diff = target.currentAmount - actualPrice
             Result.success(diff)
         } catch (e: Exception) {

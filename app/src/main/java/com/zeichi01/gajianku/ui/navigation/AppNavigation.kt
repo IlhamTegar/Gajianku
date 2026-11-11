@@ -8,6 +8,7 @@ import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.List
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material.icons.filled.History
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -32,6 +33,7 @@ import com.zeichi01.gajianku.ui.screen.HomeScreen
 import com.zeichi01.gajianku.ui.screen.PlaceholderScreen
 import com.zeichi01.gajianku.ui.screen.ProfileScreen
 import com.zeichi01.gajianku.ui.screen.TargetScreen
+import com.zeichi01.gajianku.ui.screen.TargetHistoryScreen
 import com.zeichi01.gajianku.ui.viewmodel.CatatanViewModel
 import com.zeichi01.gajianku.ui.viewmodel.ProfileViewModel
 import com.zeichi01.gajianku.ui.viewmodel.TargetViewModel
@@ -43,6 +45,7 @@ sealed class Screen(val route: String, val title: String, val icon: ImageVector)
     object Profile : Screen("profile", "Profile", Icons.Default.Person)
     object Emergency : Screen("emergency", "Darurat", Icons.Default.Warning)
     object Settings : Screen("settings", "Pengaturan", Icons.Default.Settings)
+    object TargetHistory : Screen("target_history", "Riwayat Target", Icons.Default.History)
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -81,6 +84,7 @@ fun AppNavigation(
     )
     val activeTargets by targetViewModel.activeTargets.collectAsStateWithLifecycle()
     val totalCollected by targetViewModel.totalCollected.collectAsStateWithLifecycle()
+    val completedTargets by targetViewModel.completedTargets.collectAsStateWithLifecycle()
 
     // 3. ProfileViewModel
     val profileViewModel: ProfileViewModel = viewModel(
@@ -154,9 +158,11 @@ fun AppNavigation(
                     onDeleteTarget = { target ->
                         targetViewModel.deleteTarget(target)
                     },
-                    // TAMBAHKAN BARIS INI UNTUK MENGHILANGKAN ERROR DRAG-AND-DROP
                     onReorder = { reorderedTargets ->
                         targetViewModel.updateTargetOrder(reorderedTargets)
+                    },
+                    onMarkAsBought = { target, actualPrice ->
+                        targetViewModel.markAsBought(target, actualPrice)
                     }
                 )
             }
@@ -164,7 +170,8 @@ fun AppNavigation(
                 ProfileScreen(
                     user = user,
                     onNavigateToEmergencyFund = { navController.navigate(Screen.Emergency.route) },
-                    onNavigateToSettings = { navController.navigate(Screen.Settings.route) }
+                    onNavigateToSettings = { navController.navigate(Screen.Settings.route) },
+                    onNavigateToHistory = { navController.navigate(Screen.TargetHistory.route) }
                 )
             }
             composable(Screen.Emergency.route) {
@@ -175,8 +182,13 @@ fun AppNavigation(
                     onBackClick = { navController.popBackStack() }
                 )
             }
+            composable(Screen.TargetHistory.route) {
+                TargetHistoryScreen(
+                    targets = completedTargets,
+                    onBackClick = { navController.popBackStack() }
+                )
+            }
             composable(Screen.Settings.route) {
-                // Placeholder sementara
                 PlaceholderScreen(title = "Pengaturan (Segera Hadir)")
             }
         }
