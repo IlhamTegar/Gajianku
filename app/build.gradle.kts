@@ -69,9 +69,6 @@ dependencies {
     // Lifecycle Compose
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.8.7")
 
-    // Library Drag and Drop (Versi ini kompatibel dengan Compose BOM di atas)
-    implementation("sh.calvin.reorderable:reorderable:2.4.0")
-
     // Unit Testing
     testImplementation(libs.junit)
     testImplementation("junit:junit:4.13.2")
