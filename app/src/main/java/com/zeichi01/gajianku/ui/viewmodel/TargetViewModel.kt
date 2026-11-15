@@ -10,6 +10,7 @@ import com.zeichi01.gajianku.data.repository.SavingsRepository
 import com.zeichi01.gajianku.domain.SavingsDistributor
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
@@ -29,13 +30,28 @@ class TargetViewModel(
             initialValue = emptyList()
         )
 
-    val totalCollected: StateFlow<Long> = activeTargets
-        .map { targets -> targets.sumOf { it.currentAmount } }
-        .stateIn(
+    // DIUBAH: Total Dana Terkumpul = Tabungan Wajib - total yang sudah dibeli
+    val totalCollected: StateFlow<Long> = run {
+        val month = allocationRepo.getCurrentMonth()
+        combine(
+            db.allocationDao().observeAllocationByMonth(month),
+            targetRepo.getAllTargets()
+        ) { alloc, targets ->
+            if (alloc == null) return@combine 0L
+            val items = allocationRepo.getItemsByAllocationOnce(alloc.id)
+            val categories = db.categoryDao().getAll().first()
+            val tabunganWajibCat = categories.find { it.name == "Tabungan Wajib" }
+            val tabunganWajib = if (tabunganWajibCat != null) {
+                items.find { it.categoryId == tabunganWajibCat.id }?.amount ?: 0L
+            } else 0L
+            val totalDibeli = targets.filter { it.status == "SELESAI" }.sumOf { it.actualPrice ?: 0L }
+            (tabunganWajib - totalDibeli).coerceAtLeast(0)
+        }.stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
             initialValue = 0L
         )
+    }
 
     val completedTargets: StateFlow<List<SavingsTarget>> = targetRepo.getCompletedTargets()
         .stateIn(
@@ -52,12 +68,10 @@ class TargetViewModel(
 
     fun updateTargetOrder(reorderedTargets: List<SavingsTarget>) {
         viewModelScope.launch {
-            // 1. Simpan urutan baru
             reorderedTargets.forEachIndexed { index, target ->
                 targetRepo.updateTarget(target.copy(sortOrder = index))
             }
 
-            // 2. Ambil Tabungan Wajib penuh
             val currentMonth = allocationRepo.getCurrentMonth()
             val alloc = allocationRepo.getAllocationByMonth(currentMonth)
             if (alloc != null) {
@@ -69,13 +83,11 @@ class TargetViewModel(
                 } else 0L
 
                 if (savingsWajib > 0) {
-                    // 3. RESET currentAmount semua target
                     reorderedTargets.forEach { target ->
                         db.savingsTargetDao().updateAmount(target.id, 0L)
                         db.savingsTargetDao().updateStatus(target.id, "AKTIF")
                     }
 
-                    // 4. Distribusi ulang dari nol
                     val freshTargets = targetRepo.getActiveTargets().first()
                     val distribution = SavingsDistributor.distribute(savingsWajib, freshTargets)
                     distribution.allocations.forEach { (targetId, allocated) ->
@@ -92,57 +104,55 @@ class TargetViewModel(
         }
     }
 
+    // DIUBAH: Kembalikan uang ke Tabungan Wajib sebelum hapus
     fun deleteTarget(target: SavingsTarget) {
         viewModelScope.launch {
-            targetRepo.deleteTarget(target)
-        }
-    }
-
-    fun markAsBought(target: SavingsTarget, actualPrice: Long) {
-        viewModelScope.launch {
-            // 1. Tandai target selesai
-            val result = targetRepo.markAsBought(target.id, actualPrice)
-            if (result.isFailure) return@launch
-
-            val diff = result.getOrNull() ?: 0L
-
-            // 2. Handle selisih
-            if (diff > 0) {
-                // Lebih murah: sisa masuk Tabungan Wajib, distribusi ulang
+            if (target.currentAmount > 0) {
                 val currentMonth = allocationRepo.getCurrentMonth()
                 val alloc = allocationRepo.getAllocationByMonth(currentMonth)
                 if (alloc != null) {
                     val items = allocationRepo.getItemsByAllocationOnce(alloc.id)
                     val categories = db.categoryDao().getAll().first()
                     val tabunganWajibCat = categories.find { it.name == "Tabungan Wajib" }
-                    val existingSavingsWajib = if (tabunganWajibCat != null) {
-                        items.find { it.categoryId == tabunganWajibCat.id }?.amount ?: 0L
-                    } else 0L
+                    if (tabunganWajibCat != null) {
+                        val currentWajib = items.find { it.categoryId == tabunganWajibCat.id }?.amount ?: 0L
+                        db.allocationDao().updateItemAmount(
+                            alloc.id,
+                            tabunganWajibCat.id,
+                            currentWajib + target.currentAmount
+                        )
+                    }
+                }
+            }
+            targetRepo.deleteTarget(target)
+        }
+    }
 
-                    // Sisa baru = tabungan wajib lama + diff
-                    val totalTabunganWajib = existingSavingsWajib + diff
+    fun markAsBought(target: SavingsTarget, actualPrice: Long) {
+        viewModelScope.launch {
+            val result = targetRepo.markAsBought(target.id, actualPrice)
+            if (result.isFailure) return@launch
 
-                    // Distribusi ulang ke target lain (yang masih AKTIF)
-                    val activeTargets = targetRepo.getActiveTargets().first()
-                    if (activeTargets.isNotEmpty()) {
-                        val distribution = SavingsDistributor.distribute(totalTabunganWajib, activeTargets)
-                        distribution.allocations.forEach { (targetId, allocated) ->
-                            if (allocated > 0) {
-                                val t = activeTargets.find { it.id == targetId } ?: return@forEach
-                                val newAmount = t.currentAmount + allocated
-                                db.savingsTargetDao().updateAmount(targetId, newAmount)
-                                if (newAmount >= t.targetAmount && t.status == "AKTIF") {
-                                    db.savingsTargetDao().updateStatus(targetId, "SIAP_DIBELI")
-                                }
+            val diff = result.getOrNull() ?: 0L
+
+            if (diff > 0) {
+                // Lebih murah: sisa masuk Tabungan Wajib, distribusi ulang
+                val activeTargets = targetRepo.getActiveTargets().first()
+                if (activeTargets.isNotEmpty()) {
+                    val distribution = SavingsDistributor.distribute(diff, activeTargets)
+                    distribution.allocations.forEach { (targetId, allocated) ->
+                        if (allocated > 0) {
+                            val t = activeTargets.find { it.id == targetId } ?: return@forEach
+                            val newAmount = t.currentAmount + allocated
+                            db.savingsTargetDao().updateAmount(targetId, newAmount)
+                            if (newAmount >= t.targetAmount && t.status == "AKTIF") {
+                                db.savingsTargetDao().updateStatus(targetId, "SIAP_DIBELI")
                             }
                         }
                     }
                 }
             } else if (diff < 0) {
-                // Lebih mahal: selisih negatif, ambil dari Tabungan Wajib atau Deficit
                 val deficitAmount = -diff
-
-                // Cek Tabungan Wajib tersisa
                 val currentMonth = allocationRepo.getCurrentMonth()
                 val alloc = allocationRepo.getAllocationByMonth(currentMonth)
                 val tabunganWajibTersisa = if (alloc != null) {
@@ -161,7 +171,6 @@ class TargetViewModel(
                 val sisaDeficit = deficitAmount - fromTabunganWajib
 
                 if (sisaDeficit > 0) {
-                    // Catat di Global Deficit
                     val deficitRepo = DeficitRepository(db.deficitDao())
                     deficitRepo.addDeficit(
                         amount = sisaDeficit,
@@ -172,6 +181,4 @@ class TargetViewModel(
             }
         }
     }
-
-
 }

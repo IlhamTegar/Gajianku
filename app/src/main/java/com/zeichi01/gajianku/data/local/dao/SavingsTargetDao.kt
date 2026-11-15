@@ -21,19 +21,35 @@ interface SavingsTargetDao {
     @Delete
     suspend fun delete(target: SavingsTarget)
 
+    // Tampilan tab Target: AKTIF + SIAP_DIBELI
     @Query("""
-    SELECT * FROM savings_targets 
-    WHERE status = 'AKTIF' 
-    ORDER BY 
-        CASE priority 
-            WHEN 'TINGGI' THEN 1 
-            WHEN 'SEDANG' THEN 2 
-            WHEN 'RENDAH' THEN 3 
-        END ASC, 
-        sortOrder ASC""")
+        SELECT * FROM savings_targets 
+        WHERE status IN ('AKTIF', 'SIAP_DIBELI') 
+        ORDER BY 
+            CASE priority 
+                WHEN 'TINGGI' THEN 1 
+                WHEN 'SEDANG' THEN 2 
+                WHEN 'RENDAH' THEN 3 
+            END ASC, 
+            sortOrder ASC
+    """)
     fun getActiveTargets(): Flow<List<SavingsTarget>>
 
-    @Query("SELECT * FROM savings_targets WHERE status = 'SIAP_DIBELI' ORDER BY priority ASC, sortOrder ASC")
+    // Untuk hitung totalCollected: SEMUA target (termasuk SELESAI)
+    @Query("SELECT * FROM savings_targets")
+    fun getAllTargets(): Flow<List<SavingsTarget>>
+
+    @Query("""
+        SELECT * FROM savings_targets 
+        WHERE status = 'SIAP_DIBELI' 
+        ORDER BY 
+            CASE priority 
+                WHEN 'TINGGI' THEN 1 
+                WHEN 'SEDANG' THEN 2 
+                WHEN 'RENDAH' THEN 3 
+            END ASC, 
+            sortOrder ASC
+    """)
     fun getReadyTargets(): Flow<List<SavingsTarget>>
 
     @Query("SELECT * FROM savings_targets WHERE status = 'SELESAI' ORDER BY completedAt DESC")

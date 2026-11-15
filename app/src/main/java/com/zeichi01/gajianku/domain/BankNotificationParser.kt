@@ -23,5 +23,6 @@ object BankNotificationParser {
         val calendar = java.util.Calendar.getInstance()
         val dayOfMonth = calendar.get(java.util.Calendar.DAY_OF_MONTH)
         return dayOfMonth in 1..10
+//        return true
     }
 }

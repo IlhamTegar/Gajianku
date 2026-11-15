@@ -24,6 +24,10 @@ interface AllocationDao {
     @Query("SELECT * FROM salary_allocations WHERE month = :month LIMIT 1")
     suspend fun getAllocationByMonth(month: String): SalaryAllocation?
 
+    // BARU: Reaktif untuk totalCollected
+    @Query("SELECT * FROM salary_allocations WHERE month = :month LIMIT 1")
+    fun observeAllocationByMonth(month: String): Flow<SalaryAllocation?>
+
     @Query("SELECT * FROM salary_allocations WHERE id = :id")
     suspend fun getAllocationById(id: Long): SalaryAllocation?
 
@@ -33,8 +37,13 @@ interface AllocationDao {
     @Query("SELECT * FROM allocation_items WHERE allocationId = :allocationId")
     suspend fun getItemsByAllocationOnce(allocationId: Long): List<AllocationItem>
 
-    @Query("SELECT * FROM salary_allocations WHERE month = :month LIMIT 1")
-    fun observeAllocationByMonth(month: String): Flow<SalaryAllocation?>
+    // BARU: Update amount per kategori (untuk deleteTarget & markAsBought)
+    @Query("""
+        UPDATE allocation_items 
+        SET amount = :amount 
+        WHERE allocationId = :allocationId AND categoryId = :categoryId
+    """)
+    suspend fun updateItemAmount(allocationId: Long, categoryId: Long, amount: Long)
 
     @Transaction
     suspend fun insertFullAllocation(
